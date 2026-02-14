@@ -197,7 +197,10 @@ func (m spawnModel) updatePickBranch(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 	default:
 		var cmd tea.Cmd
 		m.branchFilter, cmd = m.branchFilter.Update(msg)
-		m.branchCursor = 0
+		filtered := m.filteredBranches()
+		if m.branchCursor >= len(filtered) {
+			m.branchCursor = max(0, len(filtered)-1)
+		}
 		return m, cmd
 	}
 
