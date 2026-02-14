@@ -430,8 +430,16 @@ func (o *Orchestrator) MergeAgent(id string) MergeResultMsg {
 
 	// Fast-forward: base is ancestor of agent
 	if git.IsAncestor(o.repoPath, baseHead, agentHead) {
-		if err := git.UpdateBranchRef(o.repoPath, a.BaseBranch, agentHead); err != nil {
-			return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("fast-forward update: %v", err)}
+		// If the base branch is checked out somewhere, merge there so the
+		// working tree gets updated. Otherwise just move the ref.
+		if wtPath := git.WorktreeForBranch(o.repoPath, a.BaseBranch); wtPath != "" {
+			if err := git.MergeFFOnly(wtPath, a.Branch); err != nil {
+				return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("fast-forward merge: %v", err)}
+			}
+		} else {
+			if err := git.UpdateBranchRef(o.repoPath, a.BaseBranch, agentHead); err != nil {
+				return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("fast-forward update: %v", err)}
+			}
 		}
 		slog.Info("fast-forward merge", "id", a.ID, "branch", a.Branch, "base", a.BaseBranch)
 		if err := o.cleanupAfterMerge(a); err != nil {

@@ -108,6 +108,27 @@ func MergeInWorktree(wtPath, mergeBranch string) (conflicted bool, err error) {
 	return false, nil
 }
 
+func MergeFFOnly(wtPath, branch string) error {
+	out, err := exec.Command("git", "-C", wtPath, "merge", "--ff-only", branch).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to fast-forward merge %s: %s (%w)", branch, strings.TrimSpace(string(out)), err)
+	}
+	return nil
+}
+
+func WorktreeForBranch(repoPath, branch string) string {
+	worktrees, err := ListWorktrees(repoPath)
+	if err != nil {
+		return ""
+	}
+	for _, wt := range worktrees {
+		if wt.Branch == branch {
+			return wt.Path
+		}
+	}
+	return ""
+}
+
 func IsBranchCheckedOut(repoPath, branch string) (bool, error) {
 	worktrees, err := ListWorktrees(repoPath)
 	if err != nil {

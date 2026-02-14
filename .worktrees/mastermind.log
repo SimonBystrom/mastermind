@@ -267,3 +267,9 @@ time=2026-02-14T22:25:53.155+09:00 level=INFO msg="agent idle with changes" id=a
 time=2026-02-14T22:27:01.129+09:00 level=INFO msg="fast-forward merge" id=a1 branch=test1 base=master
 time=2026-02-14T22:27:01.160+09:00 level=INFO msg="agent cleaned up after merge" id=a1
 time=2026-02-14T22:56:00.133+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T22:56:45.823+09:00 level=INFO msg="agent spawned" id=a1 branch=review/test name=""
+time=2026-02-14T22:59:44.203+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T23:12:54.185+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T23:13:08.218+09:00 level=INFO msg="agent idle with changes" id=a1
+time=2026-02-14T23:14:18.958+09:00 level=INFO msg="fast-forward merge" id=a1 branch=review/test base=master
+time=2026-02-14T23:14:18.990+09:00 level=INFO msg="agent cleaned up after merge" id=a1
