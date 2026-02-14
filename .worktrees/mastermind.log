@@ -191,3 +191,79 @@ time=2026-02-14T16:03:32.962+09:00 level=INFO msg="agent finished" id=a1 exitCod
 time=2026-02-14T16:03:34.958+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
 time=2026-02-14T16:03:36.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
 time=2026-02-14T16:03:38.959+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:40.977+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:42.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:44.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:46.977+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:48.966+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:50.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:52.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:54.974+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:56.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:58.968+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:04:00.968+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:04:02.979+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:04:04.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:04:06.979+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:04:08.968+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:04:09.000+09:00 level=INFO msg="agent dismissed" id=a1 deleteBranch=false
+time=2026-02-14T16:04:37.039+09:00 level=INFO msg="agent spawned" id=a1 branch=review name=reciew
+time=2026-02-14T16:04:43.037+09:00 level=INFO msg="agent idle without changes" id=a1
+time=2026-02-14T16:06:30.960+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:06:58.982+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-14T16:07:02.978+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:10:10.975+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T16:10:36.975+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:14:16.982+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T16:15:46.334+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T16:15:46.340+09:00 level=INFO msg="recovered agent" id=a1 branch=review status=waiting
+time=2026-02-14T16:15:46.340+09:00 level=INFO msg="agent recovery complete" recovered=1 total=1
+time=2026-02-14T16:15:48.395+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:15:52.394+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T16:16:08.391+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:16:16.396+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-14T16:17:10.396+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:17:14.414+09:00 level=INFO msg="agent idle without changes" id=a1
+time=2026-02-14T16:17:37.997+09:00 level=INFO msg="agent dismissed" id=a1 deleteBranch=false
+time=2026-02-14T16:17:44.837+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T16:18:57.041+09:00 level=INFO msg="agent spawned" id=a1 branch=test name=""
+time=2026-02-14T16:19:46.939+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T16:19:56.891+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:21:08.903+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T16:21:18.890+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:21:42.921+09:00 level=INFO msg="agent idle with changes" id=a1
+time=2026-02-14T16:55:25.173+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T16:55:25.180+09:00 level=INFO msg="recovered agent" id=a1 branch=test status=reviewing
+time=2026-02-14T16:55:25.180+09:00 level=INFO msg="agent recovery complete" recovered=1 total=1
+time=2026-02-14T16:55:29.233+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:55:33.252+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T17:21:19.229+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T17:21:25.248+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T17:57:23.824+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T17:57:23.832+09:00 level=INFO msg="recovered agent" id=a1 branch=test status=waiting
+time=2026-02-14T17:57:23.832+09:00 level=INFO msg="agent recovery complete" recovered=1 total=1
+time=2026-02-14T17:57:25.887+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T17:57:29.903+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T19:09:14.968+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T19:09:20.973+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T20:16:20.785+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T20:16:51.488+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T22:11:58.209+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T22:12:04.228+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T22:19:02.776+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T22:19:02.782+09:00 level=INFO msg="recovered agent" id=a1 branch=test status=waiting
+time=2026-02-14T22:19:02.782+09:00 level=INFO msg="agent recovery complete" recovered=1 total=1
+time=2026-02-14T22:19:04.839+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T22:19:08.857+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T22:19:27.065+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T22:19:27.071+09:00 level=INFO msg="recovered agent" id=a1 branch=test status=waiting
+time=2026-02-14T22:19:27.071+09:00 level=INFO msg="agent recovery complete" recovered=1 total=1
+time=2026-02-14T22:19:29.109+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T22:19:29.639+09:00 level=INFO msg="agent dismissed" id=a1 deleteBranch=false
+time=2026-02-14T22:24:06.706+09:00 level=INFO msg="agent spawned" id=a1 branch=test1 name="testing reviews"
+time=2026-02-14T22:25:31.137+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T22:25:41.153+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T22:25:53.155+09:00 level=INFO msg="agent idle with changes" id=a1
+time=2026-02-14T22:27:01.129+09:00 level=INFO msg="fast-forward merge" id=a1 branch=test1 base=master
+time=2026-02-14T22:27:01.160+09:00 level=INFO msg="agent cleaned up after merge" id=a1
+time=2026-02-14T22:56:00.133+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"

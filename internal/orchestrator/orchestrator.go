@@ -128,6 +128,23 @@ func (o *Orchestrator) DismissAgent(id string, deleteBranch bool) error {
 		o.monitor.Remove(a.TmuxPaneID)
 	}
 
+	// Gracefully stop Claude if the pane is still alive
+	if a.TmuxPaneID != "" && tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
+		status := a.GetStatus()
+		if status == agent.StatusRunning || status == agent.StatusWaiting {
+			// Send Ctrl+C to interrupt, then /exit to quit cleanly
+			tmux.SendKeys(a.TmuxPaneID, "C-c")
+			tmux.SendKeys(a.TmuxPaneID, "/exit", "Enter")
+			// Give Claude a moment to shut down
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	// Kill lazygit pane if open
+	if lgPane := a.GetLazygitPaneID(); lgPane != "" {
+		tmux.KillPane(lgPane)
+	}
+
 	if a.TmuxWindow != "" {
 		tmux.KillWindow(a.TmuxWindow)
 	}
@@ -209,7 +226,15 @@ func (o *Orchestrator) StartMonitor() {
 
 			// Handle lazygit pane detection for reviewing/conflicts agents
 			if (status == agent.StatusReviewing || status == agent.StatusConflicts) && a.GetLazygitPaneID() != "" {
-				if !tmux.PaneExists(a.GetLazygitPaneID()) {
+				lgGone := !tmux.PaneExistsInWindow(a.GetLazygitPaneID(), a.TmuxWindow)
+				if !lgGone {
+					// Pane exists but may be dead (remain-on-exit keeps it around).
+					lgStatus, err := o.monitor.GetPaneStatus(a.GetLazygitPaneID())
+					lgGone = err != nil || lgStatus.Dead
+				}
+				if lgGone {
+					// Kill the dead lazygit pane if it's still lingering
+					tmux.KillPane(a.GetLazygitPaneID())
 					o.handleLazygitClosed(a, status)
 				}
 				continue
@@ -238,6 +263,13 @@ func (o *Orchestrator) StartMonitor() {
 
 			if paneStatus.Dead {
 				o.handleAgentFinished(a, paneStatus.ExitCode)
+				continue
+			}
+
+			// Settled statuses only need pane-gone/dead detection above.
+			// Don't re-classify them based on pane content — the pattern
+			// matcher can produce false positives that demote these states.
+			if status == agent.StatusReviewed || status == agent.StatusReviewReady || status == agent.StatusDone {
 				continue
 			}
 
@@ -376,75 +408,66 @@ func (o *Orchestrator) handleLazygitClosed(a *agent.Agent, status agent.Status) 
 	}
 }
 
-func (o *Orchestrator) MergeAgent(id string) error {
+func (o *Orchestrator) MergeAgent(id string) MergeResultMsg {
 	a, ok := o.store.Get(id)
 	if !ok {
-		return fmt.Errorf("agent %s not found", id)
+		return MergeResultMsg{AgentID: id, Error: "agent not found"}
 	}
 
 	if git.HasChanges(a.WorktreePath) {
-		return fmt.Errorf("uncommitted changes in worktree — commit or discard them first")
+		return MergeResultMsg{AgentID: id, Error: "uncommitted changes in worktree — commit or discard them first"}
 	}
 
 	agentHead, err := git.HeadCommit(a.WorktreePath, "HEAD")
 	if err != nil {
-		return fmt.Errorf("get agent HEAD: %w", err)
+		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("get agent HEAD: %v", err)}
 	}
 
 	baseHead, err := git.HeadCommit(o.repoPath, a.BaseBranch)
 	if err != nil {
-		return fmt.Errorf("get base HEAD: %w", err)
+		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("get base HEAD: %v", err)}
 	}
 
 	// Fast-forward: base is ancestor of agent
 	if git.IsAncestor(o.repoPath, baseHead, agentHead) {
 		if err := git.UpdateBranchRef(o.repoPath, a.BaseBranch, agentHead); err != nil {
-			return fmt.Errorf("fast-forward update: %w", err)
+			return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("fast-forward update: %v", err)}
 		}
 		slog.Info("fast-forward merge", "id", a.ID, "branch", a.Branch, "base", a.BaseBranch)
 		if err := o.cleanupAfterMerge(a); err != nil {
-			return fmt.Errorf("cleanup: %w", err)
+			return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("cleanup: %v", err)}
 		}
-		if o.program != nil {
-			o.program.Send(MergeResultMsg{AgentID: a.ID, Success: true})
-		}
-		return nil
+		return MergeResultMsg{AgentID: id, Success: true}
 	}
 
 	// Non-fast-forward: need to do a real merge
 	checkedOut, err := git.IsBranchCheckedOut(o.repoPath, a.BaseBranch)
 	if err != nil {
-		return fmt.Errorf("check branch checkout: %w", err)
+		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("check branch checkout: %v", err)}
 	}
 	if checkedOut {
-		return fmt.Errorf("base branch %q is checked out in another worktree — switch away first", a.BaseBranch)
+		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("base branch %q is checked out in another worktree — switch away first", a.BaseBranch)}
 	}
 
 	if err := git.CheckoutBranch(a.WorktreePath, a.BaseBranch); err != nil {
-		return fmt.Errorf("checkout base: %w", err)
+		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("checkout base: %v", err)}
 	}
 
 	conflicted, err := git.MergeInWorktree(a.WorktreePath, a.Branch)
 	if err != nil {
-		return fmt.Errorf("merge: %w", err)
+		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("merge: %v", err)}
 	}
 
 	if conflicted {
 		a.SetStatus(agent.StatusConflicts)
-		if o.program != nil {
-			o.program.Send(MergeResultMsg{AgentID: a.ID, Conflict: true})
-		}
-		return nil
+		return MergeResultMsg{AgentID: id, Conflict: true}
 	}
 
 	slog.Info("merge completed", "id", a.ID, "branch", a.Branch, "base", a.BaseBranch)
 	if err := o.cleanupAfterMerge(a); err != nil {
-		return fmt.Errorf("cleanup: %w", err)
+		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("cleanup: %v", err)}
 	}
-	if o.program != nil {
-		o.program.Send(MergeResultMsg{AgentID: a.ID, Success: true})
-	}
-	return nil
+	return MergeResultMsg{AgentID: id, Success: true}
 }
 
 func (o *Orchestrator) cleanupAfterMerge(a *agent.Agent) error {
@@ -514,7 +537,7 @@ func (o *Orchestrator) RecoverAgents() {
 	recovered := 0
 	for _, pa := range persisted {
 		// Check if the tmux pane still exists
-		if !tmux.PaneExists(pa.TmuxPaneID) {
+		if !tmux.PaneExistsInWindow(pa.TmuxPaneID, pa.TmuxWindow) {
 			slog.Debug("skipping stale agent, pane gone", "id", pa.ID, "pane", pa.TmuxPaneID)
 			continue
 		}

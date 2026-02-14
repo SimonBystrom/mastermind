@@ -61,6 +61,14 @@ func KillWindow(target string) error {
 	return nil
 }
 
+func SendKeys(paneID string, keys ...string) error {
+	args := append([]string{"send-keys", "-t", paneID}, keys...)
+	if err := exec.Command("tmux", args...).Run(); err != nil {
+		return fmt.Errorf("send keys to pane %s: %w", paneID, err)
+	}
+	return nil
+}
+
 func KillPane(paneID string) error {
 	if err := exec.Command("tmux", "kill-pane", "-t", paneID).Run(); err != nil {
 		return fmt.Errorf("kill tmux pane %s: %w", paneID, err)

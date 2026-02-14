@@ -38,10 +38,10 @@ Mastermind creates a `.worktrees/` directory in your repo for worktrees, state, 
 
 ### Options
 
-| Flag | Description |
-|------|-------------|
-| `--repo <path>` | Path to git repository (defaults to current directory) |
-| `--session <name>` | tmux session name (defaults to current session) |
+| Flag               | Description                                            |
+| ------------------ | ------------------------------------------------------ |
+| `--repo <path>`    | Path to git repository (defaults to current directory) |
+| `--session <name>` | tmux session name (defaults to current session)        |
 
 ## Features
 
@@ -55,17 +55,16 @@ Mastermind creates a `.worktrees/` directory in your repo for worktrees, state, 
 
 ## Keybindings
 
-| Key | Action |
-|-----|--------|
-| `n` | Open spawn wizard to create a new agent |
-| `enter` | Focus agent window / open lazygit for review-ready agents |
-| `m` | Merge agent branch into base branch (reviewed/review-ready agents) |
-| `d` | Dismiss finished agent (keep branch) |
-| `D` | Dismiss finished agent + delete branch (with confirmation) |
-| `c` | Clean up dead agents |
-| `j` / `k` | Navigate agent list |
-| `s` | Cycle sort mode (id / status / duration) |
-| `q` | Quit |
+| Key       | Action                                                     |
+| --------- | ---------------------------------------------------------- |
+| `n`       | Open spawn wizard to create a new agent                    |
+| `enter`   | Focus agent window / open lazygit for review-ready agents  |
+| `d`       | Dismiss finished agent (keep branch)                       |
+| `D`       | Dismiss finished agent + delete branch (with confirmation) |
+| `c`       | Clean up dead agents                                       |
+| `j` / `k` | Navigate agent list                                        |
+| `s`       | Cycle sort mode (id / status / duration)                   |
+| `q`       | Quit                                                       |
 
 ## How It Works
 
@@ -75,36 +74,3 @@ Mastermind creates a `.worktrees/` directory in your repo for worktrees, state, 
 4. **Dismiss** — tears down the tmux window, removes the worktree, optionally deletes the branch.
 
 Agent state is persisted to `.worktrees/mastermind-state.json` and agents are recovered on restart. Logs are written to `.worktrees/mastermind.log`.
-
-## Project Structure
-
-```
-mastermind/
-├── main.go                     # Entry point, dependency validation, tmux setup
-├── go.mod / go.sum             # Go module dependencies
-├── Makefile                    # Build targets (build, clean, run)
-├── internal/
-│   ├── agent/
-│   │   ├── agent.go            # Agent struct, status constants, thread-safe state
-│   │   ├── store.go            # Thread-safe agent store
-│   │   └── persistence.go      # State serialization to JSON
-│   ├── orchestrator/
-│   │   └── orchestrator.go     # Spawn, monitor, state transitions, cleanup
-│   ├── tmux/
-│   │   ├── window.go           # Create/manage tmux windows and panes
-│   │   ├── monitor.go          # Pane content monitoring with stable-content hashing
-│   │   ├── patterns.go         # Pattern matching for Claude Code UI detection
-│   │   ├── session.go          # Session management
-│   │   └── version.go          # tmux version validation
-│   ├── git/
-│   │   ├── worktree.go         # Create/remove git worktrees
-│   │   └── branch.go           # Branch operations
-│   └── ui/
-│       ├── app.go              # Main Bubble Tea app model
-│       ├── dashboard.go        # Dashboard view (agent list, statuses, notifications)
-│       ├── spawn.go            # Spawn wizard for creating new agents
-│       └── styles.go           # Lipgloss terminal styling
-└── .worktrees/                 # Runtime directory (created per-repo)
-    ├── mastermind-state.json   # Persisted agent state
-    └── mastermind.log          # Application logs
-```

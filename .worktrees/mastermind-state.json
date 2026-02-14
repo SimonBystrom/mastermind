@@ -1,17 +1,1 @@
-[
-  {
-    "id": "a1",
-    "name": "",
-    "branch": "review-test",
-    "base_branch": "master",
-    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/review-test",
-    "tmux_window": "@25",
-    "tmux_pane_id": "%33",
-    "status": "done",
-    "waiting_for": "",
-    "ever_active": true,
-    "exit_code": 0,
-    "started_at": "2026-02-14T15:51:23.844238+09:00",
-    "finished_at": "2026-02-14T16:03:38.952588+09:00"
-  }
-]
+[]

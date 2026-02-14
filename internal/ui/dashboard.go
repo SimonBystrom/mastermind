@@ -232,14 +232,11 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		if m.confirmMerge {
 			switch msg.String() {
 			case "y":
-				if err := m.orch.MergeAgent(m.mergeAgentID); err != nil {
-					m.err = err.Error()
-				}
-				agents := m.sortedAgents()
-				if m.cursor > 0 && m.cursor >= len(agents) {
-					m.cursor = len(agents) - 1
-				}
+				mergeID := m.mergeAgentID
 				m.confirmMerge = false
+				return m, func() tea.Msg {
+					return m.orch.MergeAgent(mergeID)
+				}
 			case "n", "esc":
 				m.confirmMerge = false
 			}
@@ -305,14 +302,11 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "d":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				status := a.GetStatus()
-				if status == agent.StatusDone || status == agent.StatusReviewReady || status == agent.StatusReviewing || status == agent.StatusReviewed || status == agent.StatusConflicts {
-					if err := m.orch.DismissAgent(a.ID, false); err != nil {
-						m.err = err.Error()
-					}
-					if m.cursor > 0 && m.cursor >= len(agents)-1 {
-						m.cursor--
-					}
+				if err := m.orch.DismissAgent(a.ID, false); err != nil {
+					m.err = err.Error()
+				}
+				if m.cursor > 0 && m.cursor >= len(agents)-1 {
+					m.cursor--
 				}
 			}
 		case "c":
@@ -345,15 +339,12 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "D":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				status := a.GetStatus()
-				if status == agent.StatusDone || status == agent.StatusReviewReady || status == agent.StatusReviewing || status == agent.StatusReviewed || status == agent.StatusConflicts {
-					m.confirmDelete = true
-					m.confirmAgentID = a.ID
-					m.confirmBranch = a.Branch
-					m.confirmAgentName = a.Name
-					if m.confirmAgentName == "" {
-						m.confirmAgentName = a.ID
-					}
+				m.confirmDelete = true
+				m.confirmAgentID = a.ID
+				m.confirmBranch = a.Branch
+				m.confirmAgentName = a.Name
+				if m.confirmAgentName == "" {
+					m.confirmAgentName = a.ID
 				}
 			}
 		}
