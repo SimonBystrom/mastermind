@@ -212,7 +212,12 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 
-			if paneStatus.WaitingFor == "permission" {
+			if paneStatus.WaitingFor != "" && a.GetEverActive() && git.HasChanges(a.WorktreePath) {
+				// Agent was active and has changes — review ready, regardless
+				// of what the pattern matcher thinks (avoids false "permission"
+				// detection when Claude is actually idle with changes).
+				o.handleAgentIdle(a)
+			} else if paneStatus.WaitingFor == "permission" {
 				// Claude needs permission approval
 				a.SetEverActive(true)
 				if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
@@ -314,7 +319,7 @@ func (o *Orchestrator) CleanupDeadAgents() []CleanupResult {
 		}
 
 		var reason string
-		if !tmux.PaneExists(a.TmuxPaneID) {
+		if !tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
 			reason = "pane gone"
 		} else if _, err := os.Stat(a.WorktreePath); os.IsNotExist(err) {
 			reason = "worktree missing"

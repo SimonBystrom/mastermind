@@ -82,6 +82,21 @@ func SelectPane(paneID string) error {
 	return nil
 }
 
+// PaneExistsInWindow returns true if the given pane ID exists inside the given window.
+// This is more robust than checking pane/window separately since tmux reuses IDs.
+func PaneExistsInWindow(paneID, windowID string) bool {
+	out, err := exec.Command("tmux", "list-panes", "-t", windowID, "-F", "#{pane_id}").Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.TrimSpace(line) == paneID {
+			return true
+		}
+	}
+	return false
+}
+
 // WindowIDForPane returns the window ID that contains the given pane.
 func WindowIDForPane(paneID string) (string, error) {
 	out, err := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{window_id}").Output()

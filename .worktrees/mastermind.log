@@ -69,3 +69,125 @@ time=2026-02-14T15:05:52.090+09:00 level=INFO msg="mastermind starting" repo=/Us
 time=2026-02-14T15:05:52.096+09:00 level=INFO msg="recovered agent" id=a1 branch=diff-review status=running
 time=2026-02-14T15:05:52.101+09:00 level=INFO msg="recovered agent" id=a2 branch=notifications status=running
 time=2026-02-14T15:05:52.101+09:00 level=INFO msg="agent recovery complete" recovered=2 total=2
+time=2026-02-14T15:40:22.836+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T15:40:22.843+09:00 level=INFO msg="recovered agent" id=a1 branch=diff-review status=running
+time=2026-02-14T15:40:22.848+09:00 level=INFO msg="recovered agent" id=a2 branch=notifications status=running
+time=2026-02-14T15:40:22.848+09:00 level=INFO msg="agent recovery complete" recovered=2 total=2
+time=2026-02-14T15:46:30.329+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T15:46:30.336+09:00 level=INFO msg="recovered agent" id=a1 branch=diff-review status=running
+time=2026-02-14T15:46:30.341+09:00 level=INFO msg="recovered agent" id=a2 branch=notifications status=running
+time=2026-02-14T15:46:30.341+09:00 level=INFO msg="agent recovery complete" recovered=2 total=2
+time=2026-02-14T15:49:32.553+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T15:49:32.559+09:00 level=INFO msg="recovered agent" id=a1 branch=diff-review status=running
+time=2026-02-14T15:49:32.564+09:00 level=INFO msg="recovered agent" id=a2 branch=notifications status=running
+time=2026-02-14T15:49:32.564+09:00 level=INFO msg="agent recovery complete" recovered=2 total=2
+time=2026-02-14T15:49:34.762+09:00 level=INFO msg="agent dismissed" id=a1 deleteBranch=false
+time=2026-02-14T15:49:34.787+09:00 level=INFO msg="agent dismissed" id=a2 deleteBranch=false
+time=2026-02-14T15:51:23.844+09:00 level=INFO msg="agent spawned" id=a1 branch=review-test name=""
+time=2026-02-14T15:51:28.634+09:00 level=INFO msg="agent idle without changes" id=a1
+time=2026-02-14T15:51:32.614+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T15:51:48.617+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-14T15:51:58.616+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T15:52:54.615+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T15:53:04.616+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T15:54:34.615+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T15:54:40.609+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T15:54:52.619+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T15:54:58.614+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T15:55:02.615+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T15:59:54.919+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T15:59:54.925+09:00 level=INFO msg="recovered agent" id=a1 branch=review-test status=waiting
+time=2026-02-14T15:59:54.925+09:00 level=INFO msg="agent recovery complete" recovered=1 total=1
+time=2026-02-14T15:59:56.977+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:00:01.021+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T16:00:38.973+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T16:00:40.987+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:42.983+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:44.984+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:46.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:48.985+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:50.970+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:52.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:54.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:56.979+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:00:58.971+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:01:01.013+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:01:02.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:01:04.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:01:06.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:01:08.971+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:01:10.972+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T16:01:12.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:14.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:16.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:18.972+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:20.970+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:22.983+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:24.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:26.983+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:28.973+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:31.029+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:32.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:34.984+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:36.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:38.972+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:40.986+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:42.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:44.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:46.979+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:48.974+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:50.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:52.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:54.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:56.983+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:01:58.972+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:01.030+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:02.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:04.986+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:06.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:08.970+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:10.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:12.985+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:14.983+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:16.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:18.970+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:20.984+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:22.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:24.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:26.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:28.970+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:30.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:32.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:34.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:36.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:38.969+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:40.979+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:42.982+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:44.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:46.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:48.972+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:50.975+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:52.977+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:54.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:56.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:02:58.969+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:00.979+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:02.965+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:04.977+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:06.979+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:08.968+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:10.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:12.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:14.979+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:16.977+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:18.968+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:20.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:22.975+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:24.980+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:26.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:28.968+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:30.978+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:32.962+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:34.958+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:36.981+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
+time=2026-02-14T16:03:38.959+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=false
