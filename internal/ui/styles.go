@@ -37,6 +37,14 @@ var (
 	reviewingStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("99"))
 
+	reviewedStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("76")).
+			Bold(true)
+
+	conflictsStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
+
 	notificationStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")).
 				Italic(true)

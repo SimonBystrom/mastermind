@@ -29,6 +29,18 @@ type AgentGoneMsg struct {
 	AgentID string
 }
 
+type AgentReviewedMsg struct {
+	AgentID    string
+	NewCommits bool
+}
+
+type MergeResultMsg struct {
+	AgentID  string
+	Success  bool
+	Conflict bool
+	Error    string
+}
+
 type Orchestrator struct {
 	ctx         context.Context
 	store       *agent.Store
@@ -149,16 +161,24 @@ func (o *Orchestrator) OpenLazyGit(id string) error {
 		return fmt.Errorf("select window: %w", err)
 	}
 
+	// Record HEAD before review starts
+	head, err := git.HeadCommit(a.WorktreePath, "HEAD")
+	if err != nil {
+		return fmt.Errorf("get head commit: %w", err)
+	}
+	a.SetPreReviewCommit(head)
+
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/bash"
 	}
-	_, err := tmux.SplitWindow(a.TmuxPaneID, a.WorktreePath, true, 80, []string{shell, "-lc", "export GPG_TTY=$(tty); exec lazygit"})
+	paneID, err := tmux.SplitWindow(a.TmuxPaneID, a.WorktreePath, true, 80, []string{shell, "-lc", "export GPG_TTY=$(tty); exec lazygit"})
 	if err != nil {
 		return fmt.Errorf("split window for lazygit: %w", err)
 	}
 
-	o.store.UpdateStatus(id, agent.StatusReviewing)
+	a.SetLazygitPaneID(paneID)
+	// Callers set the status themselves (allows StatusConflicts to open lazygit without change)
 	return nil
 }
 
@@ -177,10 +197,19 @@ func (o *Orchestrator) StartMonitor() {
 		agents := o.store.All()
 		for _, a := range agents {
 			status := a.GetStatus()
+
+			// Handle lazygit pane detection for reviewing/conflicts agents
+			if (status == agent.StatusReviewing || status == agent.StatusConflicts) && a.GetLazygitPaneID() != "" {
+				if !tmux.PaneExists(a.GetLazygitPaneID()) {
+					o.handleLazygitClosed(a, status)
+				}
+				continue
+			}
+
 			switch status {
 			case agent.StatusRunning, agent.StatusWaiting,
 				agent.StatusReviewReady, agent.StatusDone,
-				agent.StatusReviewing:
+				agent.StatusReviewed:
 				// These statuses need monitoring
 			default:
 				continue
@@ -286,6 +315,133 @@ func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 	}
 }
 
+func (o *Orchestrator) handleLazygitClosed(a *agent.Agent, status agent.Status) {
+	a.SetLazygitPaneID("")
+
+	if status == agent.StatusReviewing {
+		currentHead, err := git.HeadCommit(a.WorktreePath, "HEAD")
+		if err != nil {
+			slog.Error("failed to get head after review", "id", a.ID, "error", err)
+			a.SetStatus(agent.StatusReviewReady)
+			return
+		}
+
+		preReview := a.GetPreReviewCommit()
+		if currentHead != preReview {
+			a.SetStatus(agent.StatusReviewed)
+			if o.program != nil {
+				o.program.Send(AgentReviewedMsg{AgentID: a.ID, NewCommits: true})
+			}
+		} else {
+			a.SetStatus(agent.StatusReviewReady)
+			if o.program != nil {
+				o.program.Send(AgentReviewedMsg{AgentID: a.ID, NewCommits: false})
+			}
+		}
+	} else if status == agent.StatusConflicts {
+		if !git.HasChanges(a.WorktreePath) {
+			// Conflicts were resolved and committed
+			if err := o.cleanupAfterMerge(a); err != nil {
+				slog.Error("cleanup after merge failed", "id", a.ID, "error", err)
+			}
+			if o.program != nil {
+				o.program.Send(MergeResultMsg{AgentID: a.ID, Success: true})
+			}
+		}
+		// If still dirty, stay in StatusConflicts
+	}
+}
+
+func (o *Orchestrator) MergeAgent(id string) error {
+	a, ok := o.store.Get(id)
+	if !ok {
+		return fmt.Errorf("agent %s not found", id)
+	}
+
+	if git.HasChanges(a.WorktreePath) {
+		return fmt.Errorf("uncommitted changes in worktree — commit or discard them first")
+	}
+
+	agentHead, err := git.HeadCommit(a.WorktreePath, "HEAD")
+	if err != nil {
+		return fmt.Errorf("get agent HEAD: %w", err)
+	}
+
+	baseHead, err := git.HeadCommit(o.repoPath, a.BaseBranch)
+	if err != nil {
+		return fmt.Errorf("get base HEAD: %w", err)
+	}
+
+	// Fast-forward: base is ancestor of agent
+	if git.IsAncestor(o.repoPath, baseHead, agentHead) {
+		if err := git.UpdateBranchRef(o.repoPath, a.BaseBranch, agentHead); err != nil {
+			return fmt.Errorf("fast-forward update: %w", err)
+		}
+		slog.Info("fast-forward merge", "id", a.ID, "branch", a.Branch, "base", a.BaseBranch)
+		if err := o.cleanupAfterMerge(a); err != nil {
+			return fmt.Errorf("cleanup: %w", err)
+		}
+		if o.program != nil {
+			o.program.Send(MergeResultMsg{AgentID: a.ID, Success: true})
+		}
+		return nil
+	}
+
+	// Non-fast-forward: need to do a real merge
+	checkedOut, err := git.IsBranchCheckedOut(o.repoPath, a.BaseBranch)
+	if err != nil {
+		return fmt.Errorf("check branch checkout: %w", err)
+	}
+	if checkedOut {
+		return fmt.Errorf("base branch %q is checked out in another worktree — switch away first", a.BaseBranch)
+	}
+
+	if err := git.CheckoutBranch(a.WorktreePath, a.BaseBranch); err != nil {
+		return fmt.Errorf("checkout base: %w", err)
+	}
+
+	conflicted, err := git.MergeInWorktree(a.WorktreePath, a.Branch)
+	if err != nil {
+		return fmt.Errorf("merge: %w", err)
+	}
+
+	if conflicted {
+		a.SetStatus(agent.StatusConflicts)
+		if o.program != nil {
+			o.program.Send(MergeResultMsg{AgentID: a.ID, Conflict: true})
+		}
+		return nil
+	}
+
+	slog.Info("merge completed", "id", a.ID, "branch", a.Branch, "base", a.BaseBranch)
+	if err := o.cleanupAfterMerge(a); err != nil {
+		return fmt.Errorf("cleanup: %w", err)
+	}
+	if o.program != nil {
+		o.program.Send(MergeResultMsg{AgentID: a.ID, Success: true})
+	}
+	return nil
+}
+
+func (o *Orchestrator) cleanupAfterMerge(a *agent.Agent) error {
+	if a.TmuxPaneID != "" {
+		o.monitor.Remove(a.TmuxPaneID)
+	}
+	if a.TmuxWindow != "" {
+		tmux.KillWindow(a.TmuxWindow)
+	}
+	if a.WorktreePath != "" {
+		git.RemoveWorktree(o.repoPath, a.WorktreePath)
+	}
+	if a.Branch != "" {
+		git.DeleteBranch(o.repoPath, a.Branch)
+	}
+	o.store.Remove(a.ID)
+	slog.Info("agent cleaned up after merge", "id", a.ID)
+	o.saveState()
+	return nil
+}
+
 func (o *Orchestrator) RepoPath() string {
 	return o.repoPath
 }
@@ -335,6 +491,12 @@ func (o *Orchestrator) RecoverAgents() {
 		a.SetEverActive(pa.EverActive)
 		if !pa.FinishedAt.IsZero() {
 			a.SetFinished(pa.ExitCode, pa.FinishedAt)
+		}
+		if pa.LazygitPaneID != "" {
+			a.SetLazygitPaneID(pa.LazygitPaneID)
+		}
+		if pa.PreReviewCommit != "" {
+			a.SetPreReviewCommit(pa.PreReviewCommit)
 		}
 
 		o.store.Add(a)
