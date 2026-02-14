@@ -18,10 +18,12 @@ type PersistedAgent struct {
 	TmuxPaneID   string    `json:"tmux_pane_id"`
 	Status       Status    `json:"status"`
 	WaitingFor   string    `json:"waiting_for"`
-	EverActive   bool      `json:"ever_active"`
-	ExitCode     int       `json:"exit_code"`
-	StartedAt    time.Time `json:"started_at"`
-	FinishedAt   time.Time `json:"finished_at"`
+	EverActive      bool      `json:"ever_active"`
+	ExitCode        int       `json:"exit_code"`
+	StartedAt       time.Time `json:"started_at"`
+	FinishedAt      time.Time `json:"finished_at"`
+	LazygitPaneID   string    `json:"lazygit_pane_id,omitempty"`
+	PreReviewCommit string    `json:"pre_review_commit,omitempty"`
 }
 
 // SaveState atomically writes agent state to a JSON file.
@@ -38,10 +40,12 @@ func SaveState(path string, agents []*Agent) error {
 			TmuxPaneID:   a.TmuxPaneID,
 			Status:       a.GetStatus(),
 			WaitingFor:   a.GetWaitingFor(),
-			EverActive:   a.GetEverActive(),
-			ExitCode:     a.GetExitCode(),
-			StartedAt:    a.StartedAt,
-			FinishedAt:   a.GetFinishedAt(),
+			EverActive:      a.GetEverActive(),
+			ExitCode:        a.GetExitCode(),
+			StartedAt:       a.StartedAt,
+			FinishedAt:      a.GetFinishedAt(),
+			LazygitPaneID:   a.GetLazygitPaneID(),
+			PreReviewCommit: a.GetPreReviewCommit(),
 		}
 	}
 

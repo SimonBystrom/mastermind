@@ -82,6 +82,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dashboard, _ = m.dashboard.Update(msg)
 		return m, nil
 
+	case orchestrator.AgentReviewedMsg:
+		m.dashboard, _ = m.dashboard.Update(msg)
+		return m, nil
+
+	case orchestrator.MergeResultMsg:
+		m.dashboard, _ = m.dashboard.Update(msg)
+		return m, nil
+
 	case orchestrator.CleanupMsg:
 		m.dashboard, _ = m.dashboard.Update(msg)
 		return m, nil
