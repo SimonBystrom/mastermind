@@ -59,6 +59,7 @@ Mastermind creates a `.worktrees/` directory in your repo for worktrees, state, 
 |-----|--------|
 | `n` | Open spawn wizard to create a new agent |
 | `enter` | Focus agent window / open lazygit for review-ready agents |
+| `m` | Merge agent branch into base branch (reviewed/review-ready agents) |
 | `d` | Dismiss finished agent (keep branch) |
 | `D` | Dismiss finished agent + delete branch (with confirmation) |
 | `c` | Clean up dead agents |
