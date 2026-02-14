@@ -274,8 +274,14 @@ func (m dashboardModel) View() string {
 				}
 			}
 
+			// Pad styled status to 12 visual characters (fmt %-12s counts
+			// bytes which breaks with ANSI escape codes from lipgloss).
+			if w := lipgloss.Width(styledStatus); w < 12 {
+				styledStatus += strings.Repeat(" ", 12-w)
+			}
+
 			// Build the row content
-			row := fmt.Sprintf("  %-4s %-18s %-22s %-12s %-10s%s",
+			row := fmt.Sprintf("  %-4s %-18s %-22s %s%-10s%s",
 				a.ID,
 				truncate(name, 18),
 				truncate(a.Branch, 22),

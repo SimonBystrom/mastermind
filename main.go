@@ -69,7 +69,7 @@ func main() {
 	orch := orchestrator.New(store, absRepo, *session, worktreeDir)
 
 	model := ui.NewApp(orch, store, absRepo, *session)
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithReportFocus())
 
 	orch.SetProgram(p)
 	go orch.StartMonitor()
