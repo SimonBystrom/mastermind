@@ -94,17 +94,17 @@ func main() {
 	model := ui.NewApp(orch, store, absRepo, *session)
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithReportFocus())
 
-	// Spawn htop pane below the TUI
-	var htopPaneID string
+	// Spawn btop pane below the TUI
+	var btopPaneID string
 	mainPaneID, err := getCurrentPaneID()
 	if err != nil {
 		slog.Warn("could not detect current pane", "error", err)
 	} else {
-		monitorCmd := "htop"
-		if _, err := exec.LookPath("htop"); err != nil {
+		monitorCmd := "btop"
+		if _, err := exec.LookPath("btop"); err != nil {
 			monitorCmd = "top"
 		}
-		htopPaneID, err = tmux.SplitWindow(mainPaneID, absRepo, false, 25, []string{monitorCmd})
+		btopPaneID, err = tmux.SplitWindow(mainPaneID, absRepo, false, 55, []string{monitorCmd})
 		if err != nil {
 			slog.Warn("could not spawn monitor pane", "error", err)
 		} else {
@@ -120,9 +120,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Clean up the htop pane
-	if htopPaneID != "" {
-		_ = tmux.KillPane(htopPaneID)
+	// Clean up the btop pane
+	if btopPaneID != "" {
+		_ = tmux.KillPane(btopPaneID)
 	}
 }
 

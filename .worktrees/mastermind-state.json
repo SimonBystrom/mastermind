@@ -1,0 +1,32 @@
+[
+  {
+    "id": "a1",
+    "name": "diff-reviewer",
+    "branch": "diff-review",
+    "base_branch": "master",
+    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/diff-review",
+    "tmux_window": "@19",
+    "tmux_pane_id": "%23",
+    "status": "running",
+    "waiting_for": "",
+    "ever_active": true,
+    "exit_code": 0,
+    "started_at": "2026-02-14T14:22:39.764714+09:00",
+    "finished_at": "2026-02-14T14:52:12.704584+09:00"
+  },
+  {
+    "id": "a2",
+    "name": "notifications",
+    "branch": "notifications",
+    "base_branch": "master",
+    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/notifications",
+    "tmux_window": "@20",
+    "tmux_pane_id": "%24",
+    "status": "running",
+    "waiting_for": "",
+    "ever_active": true,
+    "exit_code": 0,
+    "started_at": "2026-02-14T14:35:33.95188+09:00",
+    "finished_at": "2026-02-14T14:49:34.687836+09:00"
+  }
+]

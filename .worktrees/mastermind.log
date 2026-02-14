@@ -1,0 +1,71 @@
+time=2026-02-14T14:14:21.889+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T14:19:20.896+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T14:21:16.604+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T14:22:39.764+09:00 level=INFO msg="agent spawned" id=a1 branch=diff-review name=diff-reviewer
+time=2026-02-14T14:23:14.661+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:23:20.657+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:23:32.662+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:23:40.663+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:24:50.660+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:24:52.661+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:27:22.660+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:27:56.662+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:28:00.704+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:28:04.656+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:28:12.655+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:28:44.658+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:28:48.659+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:28:50.659+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:29:00.653+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:29:06.651+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:29:52.661+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:30:16.652+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:30:36.658+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:30:40.655+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:30:58.661+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:31:10.654+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:32:08.668+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:32:16.675+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:35:33.951+09:00 level=INFO msg="agent spawned" id=a2 branch=notifications name=notifications
+time=2026-02-14T14:36:58.670+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
+time=2026-02-14T14:36:58.689+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:37:10.673+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:37:26.686+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-14T14:37:36.689+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
+time=2026-02-14T14:37:47.345+09:00 level=INFO msg="agent spawned" id=a3 branch=planning-mode name=planner-fixer
+time=2026-02-14T14:38:48.688+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-14T14:40:40.686+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-14T14:41:24.695+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-14T14:42:50.681+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-14T14:43:08.684+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-14T14:43:20.670+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:43:22.705+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-14T14:43:42.703+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-14T14:44:08.702+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-14T14:44:42.694+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-14T14:46:38.689+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
+time=2026-02-14T14:47:38.665+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:47:42.700+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:47:46.692+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:47:52.669+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:47:54.672+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:48:12.665+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:48:48.697+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:49:00.700+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-14T14:49:04.667+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:49:32.676+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-14T14:49:34.699+09:00 level=INFO msg="agent finished" id=a2 exitCode=0 hasChanges=true
+time=2026-02-14T14:49:36.664+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-14T14:52:12.716+09:00 level=INFO msg="agent finished" id=a1 exitCode=0 hasChanges=true
+time=2026-02-14T14:52:14.707+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-14T14:53:30.707+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-14T15:01:04.674+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-14T15:01:06.679+09:00 level=INFO msg="agent finished" id=a3 exitCode=0 hasChanges=false
+time=2026-02-14T15:01:08.680+09:00 level=INFO msg="agent finished" id=a3 exitCode=0 hasChanges=false
+time=2026-02-14T15:01:10.679+09:00 level=INFO msg="agent finished" id=a3 exitCode=0 hasChanges=false
+time=2026-02-14T15:01:12.673+09:00 level=INFO msg="agent finished" id=a3 exitCode=0 hasChanges=false
+time=2026-02-14T15:01:14.437+09:00 level=INFO msg="agent dismissed" id=a3 deleteBranch=false
+time=2026-02-14T15:05:52.090+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-14T15:05:52.096+09:00 level=INFO msg="recovered agent" id=a1 branch=diff-review status=running
+time=2026-02-14T15:05:52.101+09:00 level=INFO msg="recovered agent" id=a2 branch=notifications status=running
+time=2026-02-14T15:05:52.101+09:00 level=INFO msg="agent recovery complete" recovered=2 total=2

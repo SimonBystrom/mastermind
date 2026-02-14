@@ -37,14 +37,6 @@ var (
 	reviewingStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("99"))
 
-	reviewedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("76")).
-			Bold(true)
-
-	conflictsStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
-			Bold(true)
-
 	notificationStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")).
 				Italic(true)
@@ -71,6 +63,10 @@ var (
 	errorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")).
 			Bold(true)
+
+	attentionStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("208")).
+			Italic(true)
 
 	separatorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("62"))

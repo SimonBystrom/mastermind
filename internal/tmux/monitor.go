@@ -9,49 +9,6 @@ import (
 	"sync"
 )
 
-type PaneStatus struct {
-	Dead       bool
-	ExitCode   int
-	WaitingFor string // "permission", "input", or "" (working)
-}
-
-// MonitorPatterns defines the string patterns used to classify pane state.
-type MonitorPatterns struct {
-	// WorkingIndicators are substrings that, if found in any bottom line,
-	// indicate Claude is still working (even if content is stable).
-	WorkingIndicators []struct {
-		Contains string
-		Suffix   string
-	}
-
-	// PermissionPatterns are substrings that indicate a permission prompt.
-	// Each entry is checked against the joined bottom content.
-	PermissionPatterns []string
-
-	// InputPatterns are substrings that indicate Claude is at the input prompt.
-	InputPatterns []string
-}
-
-// DefaultPatterns contains the default detection patterns for Claude Code.
-var DefaultPatterns = MonitorPatterns{
-	WorkingIndicators: []struct {
-		Contains string
-		Suffix   string
-	}{
-		{Contains: "Running", Suffix: "…"},
-	},
-	PermissionPatterns: []string{
-		"accept edits",
-		"Yes",  // checked together with "No" below
-		"Allow", // checked together with "Deny" below
-		"allow for",
-		"Always allow",
-	},
-	InputPatterns: []string{
-		"for shortcuts",
-	},
-}
-
 // PaneMonitor tracks pane content over time to detect when Claude is waiting.
 // If the visible pane content is changing between polls, Claude is working.
 // If it's stable, we classify what it's waiting for.
@@ -171,15 +128,10 @@ func (m *PaneMonitor) classifyStablePane(content string) string {
 
 	// --- Permission prompts ---
 	for _, pattern := range m.Patterns.PermissionPatterns {
-		if !strings.Contains(bottom, pattern) {
+		if !strings.Contains(bottom, pattern.Contains) {
 			continue
 		}
-		// "Yes" requires "No" to also be present
-		if pattern == "Yes" && !strings.Contains(bottom, "No") {
-			continue
-		}
-		// "Allow" requires "Deny" to also be present
-		if pattern == "Allow" && !strings.Contains(bottom, "Deny") {
+		if pattern.RequiresAlso != "" && !strings.Contains(bottom, pattern.RequiresAlso) {
 			continue
 		}
 		return "permission"
@@ -187,14 +139,13 @@ func (m *PaneMonitor) classifyStablePane(content string) string {
 
 	// --- Idle at input prompt ---
 	for _, pattern := range m.Patterns.InputPatterns {
-		if strings.Contains(bottom, pattern) {
+		if strings.Contains(bottom, pattern.Contains) {
 			return "input"
 		}
 	}
 
-	// Fallback: content is stable and no working indicators found.
-	// This catches any permission/question UI we haven't explicitly matched.
-	return "input"
+	// Fallback: content is stable and we can't identify the state.
+	return "unknown"
 }
 
 func capturePane(paneID string) string {
