@@ -34,6 +34,7 @@ type spawnModel struct {
 	step     spawnStep
 	mode     spawnMode
 	err      string
+	width    int
 
 	// Mode selection
 	modeCursor int
@@ -274,7 +275,7 @@ func (m spawnModel) filteredBranches() []git.Branch {
 	return result
 }
 
-func (m spawnModel) View() string {
+func (m spawnModel) ViewContent() string {
 	var b strings.Builder
 
 	b.WriteString(wizardTitleStyle.Render("Spawn New Agent"))
@@ -397,5 +398,9 @@ func (m spawnModel) View() string {
 		b.WriteString(errorStyle.Render("  Error: " + m.err))
 	}
 
-	return borderStyle.Render(b.String())
+	return b.String()
+}
+
+func (m spawnModel) View() string {
+	return borderStyle.Render(m.ViewContent())
 }

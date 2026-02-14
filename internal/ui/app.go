@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
@@ -50,6 +53,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.dashboard.width = msg.Width
 		m.dashboard.height = msg.Height
+		m.spawn.width = msg.Width
 		return m, nil
 
 	case tea.FocusMsg:
@@ -123,8 +127,39 @@ func (m AppModel) updateSpawn(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m AppModel) View() string {
 	switch m.activeView {
 	case viewSpawn:
-		return m.spawn.View()
+		return m.viewSideBySide()
 	default:
 		return m.dashboard.View()
 	}
+}
+
+func (m AppModel) viewSideBySide() string {
+	maxWidth := m.width - 4
+	if maxWidth < 40 {
+		maxWidth = 80
+	}
+
+	// 55% for dashboard, 45% for spawn, minus 1 for separator
+	dashWidth := maxWidth * 55 / 100
+	spawnWidth := maxWidth - dashWidth - 1
+
+	dashContent := lipgloss.NewStyle().Width(dashWidth).Render(m.dashboard.ViewContent())
+	spawnContent := lipgloss.NewStyle().Width(spawnWidth).Render(m.spawn.ViewContent())
+
+	// Build a vertical separator matching the height of the taller panel
+	dashHeight := lipgloss.Height(dashContent)
+	spawnHeight := lipgloss.Height(spawnContent)
+	sepHeight := dashHeight
+	if spawnHeight > sepHeight {
+		sepHeight = spawnHeight
+	}
+	sepLines := make([]string, sepHeight)
+	for i := range sepLines {
+		sepLines[i] = "│"
+	}
+	sep := separatorStyle.Render(strings.Join(sepLines, "\n"))
+
+	joined := lipgloss.JoinHorizontal(lipgloss.Top, dashContent, sep, spawnContent)
+
+	return borderStyle.Width(maxWidth).Render(joined)
 }
