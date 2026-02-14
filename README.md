@@ -46,7 +46,7 @@ Mastermind creates a `.worktrees/` directory in your repo for worktrees, state, 
 ## Features
 
 - **Parallel agents** — run multiple Claude Code instances simultaneously, each isolated in its own git worktree and branch
-- **Real-time status monitoring** — polls tmux pane content every 2s with SHA256 stable-content hashing to detect agent state (running, waiting for permission/input, review-ready, done)
+- **Real-time status monitoring** — polls tmux pane content every 2s with SHA256 stable-content hashing to detect agent state (running, waiting for permission/input, needs attention, review-ready, done)
 - **Spawn wizard** — multi-step wizard to select a base branch, create or pick a branch, and name the agent, rendered side-by-side with the dashboard
 - **LazyGit integration** — opens lazygit in a split pane for reviewing uncommitted changes, tracks commits made during review
 - **Merge workflow** — merge agent branches back into their base branch with fast-forward or full merge, including conflict detection and resolution via lazygit
@@ -72,6 +72,7 @@ review ready → reviewing (lazygit open) → reviewed (commits made)
 | -------------- | ---------------------------------------------------- |
 | **running**    | Claude Code is actively working                      |
 | **waiting**    | Agent needs permission approval or user input         |
+| **attention?** | Agent may need attention (stable but unrecognized state) |
 | **review ready** | Agent finished with uncommitted changes            |
 | **reviewing**  | LazyGit is open for review                           |
 | **reviewed**   | Review completed, new commits were made              |
@@ -83,14 +84,14 @@ review ready → reviewing (lazygit open) → reviewed (commits made)
 | Key        | Action                                                     |
 | ---------- | ---------------------------------------------------------- |
 | `n`        | Open spawn wizard to create a new agent                    |
-| `enter`    | Focus agent window / open lazygit for review-ready agents  |
-| `m`        | Merge agent branch into base branch (with confirmation)    |
+| `enter`    | Focus agent window / open lazygit for review-ready, reviewed, or conflicting agents |
+| `m`        | Merge agent branch into base branch (review-ready or reviewed, with confirmation) |
 | `d`        | Dismiss finished agent (keep branch)                       |
 | `D`        | Dismiss finished agent + delete branch (with confirmation) |
 | `c`        | Clean up dead agents                                       |
-| `j` / `k`  | Navigate agent list                                        |
+| `j` / `k` / `↓` / `↑` | Navigate agent list                          |
 | `s`        | Cycle sort mode (id / status / duration)                   |
-| `q`        | Quit                                                       |
+| `q` / `ctrl+c` | Quit                                                   |
 
 ## How It Works
 
