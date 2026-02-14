@@ -94,12 +94,35 @@ func main() {
 	model := ui.NewApp(orch, store, absRepo, *session)
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithReportFocus())
 
+	// Spawn htop pane below the TUI
+	var htopPaneID string
+	mainPaneID, err := getCurrentPaneID()
+	if err != nil {
+		slog.Warn("could not detect current pane", "error", err)
+	} else {
+		monitorCmd := "htop"
+		if _, err := exec.LookPath("htop"); err != nil {
+			monitorCmd = "top"
+		}
+		htopPaneID, err = tmux.SplitWindow(mainPaneID, absRepo, false, 25, []string{monitorCmd})
+		if err != nil {
+			slog.Warn("could not spawn monitor pane", "error", err)
+		} else {
+			_ = tmux.SelectPane(mainPaneID)
+		}
+	}
+
 	orch.SetProgram(p)
 	go orch.StartMonitor()
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Clean up the htop pane
+	if htopPaneID != "" {
+		_ = tmux.KillPane(htopPaneID)
 	}
 }
 
@@ -119,6 +142,18 @@ func validateGitRepo(path string) error {
 		return fmt.Errorf("%s is not a git repository", path)
 	}
 	return nil
+}
+
+func getCurrentPaneID() (string, error) {
+	out, err := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current pane id: %w", err)
+	}
+	id := strings.TrimSpace(string(out))
+	if id == "" {
+		return "", fmt.Errorf("empty pane id")
+	}
+	return id, nil
 }
 
 func detectTmuxSession() (string, error) {

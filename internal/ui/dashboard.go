@@ -265,7 +265,7 @@ func (m dashboardModel) sortLabel() string {
 	}
 }
 
-func (m dashboardModel) View() string {
+func (m dashboardModel) ViewContent() string {
 	var b strings.Builder
 
 	// Title
@@ -383,7 +383,11 @@ func (m dashboardModel) View() string {
 	b.WriteString("\n")
 	b.WriteString(helpStyle.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ d: dismiss │ D: dismiss+delete branch │ s: sort (%s) │ q: quit", m.sortLabel())))
 
-	content := b.String()
+	return b.String()
+}
+
+func (m dashboardModel) View() string {
+	content := m.ViewContent()
 
 	maxWidth := m.width - 4
 	if maxWidth < 40 {
