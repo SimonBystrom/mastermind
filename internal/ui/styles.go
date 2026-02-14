@@ -31,7 +31,7 @@ var (
 			Bold(true)
 
 	permissionStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
+			Foreground(lipgloss.Color("220")).
 			Bold(true)
 
 	reviewingStyle = lipgloss.NewStyle().
