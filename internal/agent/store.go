@@ -46,13 +46,13 @@ func (s *Store) All() []*Agent {
 }
 
 func (s *Store) UpdateStatus(id string, status Status) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
 	a, ok := s.agents[id]
+	s.mu.RUnlock()
 	if !ok {
 		return false
 	}
-	a.Status = status
+	a.SetStatus(status)
 	return true
 }
 

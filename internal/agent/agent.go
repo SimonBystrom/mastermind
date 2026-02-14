@@ -1,6 +1,9 @@
 package agent
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type Status string
 
@@ -14,6 +17,7 @@ const (
 )
 
 type Agent struct {
+	// Immutable fields (safe to read without lock)
 	ID           string
 	Name         string
 	Branch       string
@@ -21,17 +25,91 @@ type Agent struct {
 	WorktreePath string
 	TmuxWindow   string
 	TmuxPaneID   string
-	Status       Status
-	WaitingFor   string // "permission" or "input" when Status == StatusWaiting
-	EverActive   bool   // true once the agent has been seen actively working
-	ExitCode     int
 	StartedAt    time.Time
-	FinishedAt   time.Time
+
+	// Mutable fields (protected by mu)
+	mu         sync.RWMutex
+	status     Status
+	waitingFor string // "permission" or "input" when status == StatusWaiting
+	everActive bool   // true once the agent has been seen actively working
+	exitCode   int
+	finishedAt time.Time
+}
+
+func NewAgent(name, branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
+	return &Agent{
+		Name:         name,
+		Branch:       branch,
+		BaseBranch:   baseBranch,
+		WorktreePath: worktreePath,
+		TmuxWindow:   tmuxWindow,
+		TmuxPaneID:   tmuxPaneID,
+		StartedAt:    time.Now(),
+		status:       StatusRunning,
+	}
+}
+
+func (a *Agent) GetStatus() Status {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.status
+}
+
+func (a *Agent) SetStatus(s Status) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.status = s
+}
+
+func (a *Agent) GetWaitingFor() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.waitingFor
+}
+
+func (a *Agent) SetWaitingFor(wf string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.waitingFor = wf
+}
+
+func (a *Agent) GetEverActive() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.everActive
+}
+
+func (a *Agent) SetEverActive(v bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.everActive = v
+}
+
+func (a *Agent) GetExitCode() int {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.exitCode
+}
+
+func (a *Agent) GetFinishedAt() time.Time {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.finishedAt
+}
+
+func (a *Agent) SetFinished(exitCode int, t time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.exitCode = exitCode
+	a.finishedAt = t
 }
 
 func (a *Agent) Duration() time.Duration {
-	if a.FinishedAt.IsZero() {
+	a.mu.RLock()
+	finished := a.finishedAt
+	a.mu.RUnlock()
+	if finished.IsZero() {
 		return time.Since(a.StartedAt)
 	}
-	return a.FinishedAt.Sub(a.StartedAt)
+	return finished.Sub(a.StartedAt)
 }

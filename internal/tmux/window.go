@@ -55,26 +55,38 @@ func SplitWindow(paneID, dir string, horizontal bool, sizePercent int, command [
 }
 
 func KillWindow(target string) error {
-	return exec.Command("tmux", "kill-window", "-t", target).Run()
+	if err := exec.Command("tmux", "kill-window", "-t", target).Run(); err != nil {
+		return fmt.Errorf("kill tmux window %s: %w", target, err)
+	}
+	return nil
 }
 
 func KillPane(paneID string) error {
-	return exec.Command("tmux", "kill-pane", "-t", paneID).Run()
+	if err := exec.Command("tmux", "kill-pane", "-t", paneID).Run(); err != nil {
+		return fmt.Errorf("kill tmux pane %s: %w", paneID, err)
+	}
+	return nil
 }
 
 func SelectWindow(target string) error {
-	return exec.Command("tmux", "select-window", "-t", target).Run()
+	if err := exec.Command("tmux", "select-window", "-t", target).Run(); err != nil {
+		return fmt.Errorf("select tmux window %s: %w", target, err)
+	}
+	return nil
 }
 
 func SelectPane(paneID string) error {
-	return exec.Command("tmux", "select-pane", "-t", paneID).Run()
+	if err := exec.Command("tmux", "select-pane", "-t", paneID).Run(); err != nil {
+		return fmt.Errorf("select tmux pane %s: %w", paneID, err)
+	}
+	return nil
 }
 
 // WindowIDForPane returns the window ID that contains the given pane.
 func WindowIDForPane(paneID string) (string, error) {
 	out, err := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{window_id}").Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to get window id for pane: %w", err)
+		return "", fmt.Errorf("get window id for pane %s: %w", paneID, err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }

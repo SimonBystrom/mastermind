@@ -13,6 +13,14 @@ import (
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
+type sortMode int
+
+const (
+	sortByID sortMode = iota
+	sortByStatus
+	sortByDuration
+)
+
 type notification struct {
 	text  string
 	time  time.Time
@@ -31,6 +39,7 @@ type dashboardModel struct {
 	width         int
 	height        int
 	err           string
+	sortBy        sortMode
 
 	// Confirmation state for dismiss+delete
 	confirmDelete    bool
@@ -163,10 +172,13 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			if m.cursor > 0 {
 				m.cursor--
 			}
+		case "s":
+			m.sortBy = (m.sortBy + 1) % 3
 		case "enter":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				switch a.Status {
+				status := a.GetStatus()
+				switch status {
 				case agent.StatusReviewReady:
 					if err := m.orch.OpenLazyGit(a.ID); err != nil {
 						m.err = err.Error()
@@ -180,7 +192,8 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "d":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				if a.Status == agent.StatusDone || a.Status == agent.StatusReviewReady || a.Status == agent.StatusReviewing {
+				status := a.GetStatus()
+				if status == agent.StatusDone || status == agent.StatusReviewReady || status == agent.StatusReviewing {
 					if err := m.orch.DismissAgent(a.ID, false); err != nil {
 						m.err = err.Error()
 					}
@@ -192,7 +205,8 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "D":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				if a.Status == agent.StatusDone || a.Status == agent.StatusReviewReady || a.Status == agent.StatusReviewing {
+				status := a.GetStatus()
+				if status == agent.StatusDone || status == agent.StatusReviewReady || status == agent.StatusReviewing {
 					m.confirmDelete = true
 					m.confirmAgentID = a.ID
 					m.confirmBranch = a.Branch
@@ -210,10 +224,45 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 
 func (m dashboardModel) sortedAgents() []*agent.Agent {
 	agents := m.store.All()
-	sort.Slice(agents, func(i, j int) bool {
-		return agents[i].ID < agents[j].ID
-	})
+	switch m.sortBy {
+	case sortByStatus:
+		statusOrder := map[agent.Status]int{
+			agent.StatusWaiting:     0,
+			agent.StatusReviewReady: 1,
+			agent.StatusRunning:     2,
+			agent.StatusReviewing:   3,
+			agent.StatusDone:        4,
+			agent.StatusDismissed:   5,
+		}
+		sort.Slice(agents, func(i, j int) bool {
+			oi := statusOrder[agents[i].GetStatus()]
+			oj := statusOrder[agents[j].GetStatus()]
+			if oi != oj {
+				return oi < oj
+			}
+			return agents[i].ID < agents[j].ID
+		})
+	case sortByDuration:
+		sort.Slice(agents, func(i, j int) bool {
+			return agents[i].Duration() > agents[j].Duration()
+		})
+	default:
+		sort.Slice(agents, func(i, j int) bool {
+			return agents[i].ID < agents[j].ID
+		})
+	}
 	return agents
+}
+
+func (m dashboardModel) sortLabel() string {
+	switch m.sortBy {
+	case sortByStatus:
+		return "status"
+	case sortByDuration:
+		return "duration"
+	default:
+		return "id"
+	}
 }
 
 func (m dashboardModel) View() string {
@@ -241,12 +290,15 @@ func (m dashboardModel) View() string {
 				name = "-"
 			}
 
+			status := a.GetStatus()
+			waitingFor := a.GetWaitingFor()
+
 			var styledStatus string
-			switch a.Status {
+			switch status {
 			case agent.StatusRunning:
 				styledStatus = runningStyle.Render("running")
 			case agent.StatusWaiting:
-				if a.WaitingFor == "permission" {
+				if waitingFor == "permission" {
 					styledStatus = permissionStyle.Render("permission")
 				} else {
 					styledStatus = waitingStyle.Render("waiting")
@@ -258,16 +310,16 @@ func (m dashboardModel) View() string {
 			case agent.StatusReviewing:
 				styledStatus = reviewingStyle.Render("reviewing")
 			default:
-				styledStatus = string(a.Status)
+				styledStatus = string(status)
 			}
 
 			dur := formatDuration(a.Duration())
 
 			indicator := "  "
-			if a.Status == agent.StatusReviewReady {
+			if status == agent.StatusReviewReady {
 				indicator = " " + reviewReadyStyle.Render("◀")
-			} else if a.Status == agent.StatusWaiting {
-				if a.WaitingFor == "permission" {
+			} else if status == agent.StatusWaiting {
+				if waitingFor == "permission" {
 					indicator = " " + permissionStyle.Render("◀")
 				} else {
 					indicator = " " + waitingStyle.Render("◀")
@@ -329,7 +381,7 @@ func (m dashboardModel) View() string {
 
 	// Help
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("  n: new agent │ enter: focus/review │ d: dismiss │ D: dismiss+delete branch │ q: quit"))
+	b.WriteString(helpStyle.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ d: dismiss │ D: dismiss+delete branch │ s: sort (%s) │ q: quit", m.sortLabel())))
 
 	content := b.String()
 

@@ -1,7 +1,9 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -28,21 +30,25 @@ type AgentGoneMsg struct {
 }
 
 type Orchestrator struct {
+	ctx         context.Context
 	store       *agent.Store
 	repoPath    string
 	session     string
 	worktreeDir string
 	program     *tea.Program
 	monitor     *tmux.PaneMonitor
+	statePath   string
 }
 
-func New(store *agent.Store, repoPath, session, worktreeDir string) *Orchestrator {
+func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string) *Orchestrator {
 	return &Orchestrator{
+		ctx:         ctx,
 		store:       store,
 		repoPath:    repoPath,
 		session:     session,
 		worktreeDir: worktreeDir,
 		monitor:     tmux.NewPaneMonitor(),
+		statePath:   worktreeDir + "/mastermind-state.json",
 	}
 }
 
@@ -51,6 +57,13 @@ func (o *Orchestrator) SetProgram(p *tea.Program) {
 }
 
 func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch bool) error {
+	// Guard against worktree name collision
+	for _, existing := range o.store.All() {
+		if existing.Branch == branch {
+			return fmt.Errorf("branch %q already in use by agent %s", branch, existing.ID)
+		}
+	}
+
 	if createBranch {
 		if err := git.CreateBranch(o.repoPath, branch, baseBranch); err != nil {
 			return fmt.Errorf("create branch: %w", err)
@@ -75,17 +88,11 @@ func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch 
 
 	windowID, _ := tmux.WindowIDForPane(paneID)
 
-	a := &agent.Agent{
-		Name:         name,
-		Branch:       branch,
-		BaseBranch:   baseBranch,
-		WorktreePath: wtPath,
-		TmuxWindow:   windowID,
-		TmuxPaneID:   paneID,
-		Status:       agent.StatusRunning,
-		StartedAt:    time.Now(),
-	}
+	a := agent.NewAgent(name, branch, baseBranch, wtPath, windowID, paneID)
 	o.store.Add(a)
+
+	slog.Info("agent spawned", "id", a.ID, "branch", branch, "name", name)
+	o.saveState()
 
 	return nil
 }
@@ -113,6 +120,10 @@ func (o *Orchestrator) DismissAgent(id string, deleteBranch bool) error {
 	}
 
 	o.store.Remove(id)
+
+	slog.Info("agent dismissed", "id", id, "deleteBranch", deleteBranch)
+	o.saveState()
+
 	return nil
 }
 
@@ -155,10 +166,18 @@ func (o *Orchestrator) StartMonitor() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-o.ctx.Done():
+			slog.Info("monitor stopped: context cancelled")
+			return
+		case <-ticker.C:
+		}
+
 		agents := o.store.All()
 		for _, a := range agents {
-			switch a.Status {
+			status := a.GetStatus()
+			switch status {
 			case agent.StatusRunning, agent.StatusWaiting,
 				agent.StatusReviewReady, agent.StatusDone,
 				agent.StatusReviewing:
@@ -167,28 +186,30 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 
-			status, err := o.monitor.GetPaneStatus(a.TmuxPaneID)
+			paneStatus, err := o.monitor.GetPaneStatus(a.TmuxPaneID)
 			if err != nil {
 				// Pane no longer exists — window was closed externally
+				slog.Debug("pane gone, marking dismissed", "id", a.ID, "pane", a.TmuxPaneID)
 				o.monitor.Remove(a.TmuxPaneID)
-				a.Status = agent.StatusDismissed
+				a.SetStatus(agent.StatusDismissed)
 				if o.program != nil {
 					o.program.Send(AgentGoneMsg{AgentID: a.ID})
 				}
 				continue
 			}
 
-			if status.Dead {
-				o.handleAgentFinished(a, status.ExitCode)
+			if paneStatus.Dead {
+				o.handleAgentFinished(a, paneStatus.ExitCode)
 				continue
 			}
 
-			if status.WaitingFor == "permission" {
+			if paneStatus.WaitingFor == "permission" {
 				// Claude needs permission approval
-				a.EverActive = true
-				if a.Status != agent.StatusWaiting || a.WaitingFor != "permission" {
-					a.Status = agent.StatusWaiting
-					a.WaitingFor = "permission"
+				a.SetEverActive(true)
+				if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
+					a.SetStatus(agent.StatusWaiting)
+					a.SetWaitingFor("permission")
+					slog.Debug("agent status change", "id", a.ID, "status", "waiting", "waitingFor", "permission")
 					if o.program != nil {
 						o.program.Send(AgentWaitingMsg{
 							AgentID:    a.ID,
@@ -196,33 +217,36 @@ func (o *Orchestrator) StartMonitor() {
 						})
 					}
 				}
-			} else if status.WaitingFor == "input" {
+			} else if paneStatus.WaitingFor == "input" {
 				// Claude is idle at prompt — only treat as finished if agent was ever active
-				if a.EverActive {
+				if a.GetEverActive() {
 					o.handleAgentIdle(a)
 				}
 			} else {
 				// Claude is actively working
-				a.EverActive = true
-				if a.Status != agent.StatusRunning {
-					a.Status = agent.StatusRunning
-					a.WaitingFor = ""
+				a.SetEverActive(true)
+				if status != agent.StatusRunning {
+					a.SetStatus(agent.StatusRunning)
+					a.SetWaitingFor("")
+					slog.Debug("agent status change", "id", a.ID, "status", "running")
 				}
 			}
 		}
+		o.saveState()
 	}
 }
 
 func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
-	a.ExitCode = exitCode
-	a.FinishedAt = time.Now()
+	a.SetFinished(exitCode, time.Now())
 
 	hasChanges := git.HasChanges(a.WorktreePath)
 	if hasChanges {
-		a.Status = agent.StatusReviewReady
+		a.SetStatus(agent.StatusReviewReady)
 	} else {
-		a.Status = agent.StatusDone
+		a.SetStatus(agent.StatusDone)
 	}
+
+	slog.Info("agent finished", "id", a.ID, "exitCode", exitCode, "hasChanges", hasChanges)
 
 	if o.program != nil {
 		o.program.Send(AgentFinishedMsg{
@@ -236,9 +260,10 @@ func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 	hasChanges := git.HasChanges(a.WorktreePath)
 	if hasChanges {
-		if a.Status != agent.StatusReviewReady {
-			a.Status = agent.StatusReviewReady
-			a.FinishedAt = time.Now()
+		if a.GetStatus() != agent.StatusReviewReady {
+			a.SetStatus(agent.StatusReviewReady)
+			a.SetFinished(a.GetExitCode(), time.Now())
+			slog.Info("agent idle with changes", "id", a.ID)
 			if o.program != nil {
 				o.program.Send(AgentFinishedMsg{
 					AgentID:    a.ID,
@@ -247,9 +272,10 @@ func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 			}
 		}
 	} else {
-		if a.Status != agent.StatusDone {
-			a.Status = agent.StatusDone
-			a.FinishedAt = time.Now()
+		if a.GetStatus() != agent.StatusDone {
+			a.SetStatus(agent.StatusDone)
+			a.SetFinished(a.GetExitCode(), time.Now())
+			slog.Info("agent idle without changes", "id", a.ID)
 			if o.program != nil {
 				o.program.Send(AgentFinishedMsg{
 					AgentID:    a.ID,
@@ -266,4 +292,64 @@ func (o *Orchestrator) RepoPath() string {
 
 func (o *Orchestrator) Session() string {
 	return o.session
+}
+
+// RecoverAgents restores agents from persisted state, validating that
+// their tmux panes and worktree directories still exist.
+func (o *Orchestrator) RecoverAgents() {
+	persisted, err := agent.LoadState(o.statePath)
+	if err != nil {
+		slog.Error("failed to load persisted state", "error", err)
+		return
+	}
+	if persisted == nil {
+		return
+	}
+
+	recovered := 0
+	for _, pa := range persisted {
+		// Check if the tmux pane still exists
+		if !tmux.PaneExists(pa.TmuxPaneID) {
+			slog.Debug("skipping stale agent, pane gone", "id", pa.ID, "pane", pa.TmuxPaneID)
+			continue
+		}
+
+		// Check if the worktree directory still exists
+		if _, err := os.Stat(pa.WorktreePath); os.IsNotExist(err) {
+			slog.Debug("skipping stale agent, worktree gone", "id", pa.ID, "path", pa.WorktreePath)
+			continue
+		}
+
+		a := &agent.Agent{
+			ID:           pa.ID,
+			Name:         pa.Name,
+			Branch:       pa.Branch,
+			BaseBranch:   pa.BaseBranch,
+			WorktreePath: pa.WorktreePath,
+			TmuxWindow:   pa.TmuxWindow,
+			TmuxPaneID:   pa.TmuxPaneID,
+			StartedAt:    pa.StartedAt,
+		}
+		a.SetStatus(pa.Status)
+		a.SetWaitingFor(pa.WaitingFor)
+		a.SetEverActive(pa.EverActive)
+		if !pa.FinishedAt.IsZero() {
+			a.SetFinished(pa.ExitCode, pa.FinishedAt)
+		}
+
+		o.store.Add(a)
+		recovered++
+		slog.Info("recovered agent", "id", a.ID, "branch", a.Branch, "status", pa.Status)
+	}
+
+	if recovered > 0 {
+		slog.Info("agent recovery complete", "recovered", recovered, "total", len(persisted))
+	}
+}
+
+func (o *Orchestrator) saveState() {
+	agents := o.store.All()
+	if err := agent.SaveState(o.statePath, agents); err != nil {
+		slog.Error("failed to save state", "error", err)
+	}
 }

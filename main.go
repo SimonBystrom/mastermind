@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
+	"github.com/simonbystrom/mastermind/internal/tmux"
 	"github.com/simonbystrom/mastermind/internal/ui"
 )
 
@@ -65,8 +68,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set up persistent logging
+	logPath := filepath.Join(worktreeDir, "mastermind.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error opening log file: %v\n", err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+	slog.SetDefault(slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+	// Log startup info
+	tmuxVersion, _ := tmux.CheckVersion()
+	slog.Info("mastermind starting", "repo", absRepo, "session", *session, "tmuxVersion", tmuxVersion)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	store := agent.NewStore()
-	orch := orchestrator.New(store, absRepo, *session, worktreeDir)
+	orch := orchestrator.New(ctx, store, absRepo, *session, worktreeDir)
+
+	// Recover agents from previous session
+	orch.RecoverAgents()
 
 	model := ui.NewApp(orch, store, absRepo, *session)
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithReportFocus())

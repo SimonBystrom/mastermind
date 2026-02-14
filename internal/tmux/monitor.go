@@ -15,6 +15,43 @@ type PaneStatus struct {
 	WaitingFor string // "permission", "input", or "" (working)
 }
 
+// MonitorPatterns defines the string patterns used to classify pane state.
+type MonitorPatterns struct {
+	// WorkingIndicators are substrings that, if found in any bottom line,
+	// indicate Claude is still working (even if content is stable).
+	WorkingIndicators []struct {
+		Contains string
+		Suffix   string
+	}
+
+	// PermissionPatterns are substrings that indicate a permission prompt.
+	// Each entry is checked against the joined bottom content.
+	PermissionPatterns []string
+
+	// InputPatterns are substrings that indicate Claude is at the input prompt.
+	InputPatterns []string
+}
+
+// DefaultPatterns contains the default detection patterns for Claude Code.
+var DefaultPatterns = MonitorPatterns{
+	WorkingIndicators: []struct {
+		Contains string
+		Suffix   string
+	}{
+		{Contains: "Running", Suffix: "…"},
+	},
+	PermissionPatterns: []string{
+		"accept edits",
+		"Yes",  // checked together with "No" below
+		"Allow", // checked together with "Deny" below
+		"allow for",
+		"Always allow",
+	},
+	InputPatterns: []string{
+		"for shortcuts",
+	},
+}
+
 // PaneMonitor tracks pane content over time to detect when Claude is waiting.
 // If the visible pane content is changing between polls, Claude is working.
 // If it's stable, we classify what it's waiting for.
@@ -22,12 +59,14 @@ type PaneMonitor struct {
 	mu          sync.Mutex
 	lastHash    map[string]string // paneID → sha256 of last capture
 	stableCount map[string]int    // paneID → number of consecutive polls with same content
+	Patterns    MonitorPatterns
 }
 
 func NewPaneMonitor() *PaneMonitor {
 	return &PaneMonitor{
 		lastHash:    make(map[string]string),
 		stableCount: make(map[string]int),
+		Patterns:    DefaultPatterns,
 	}
 }
 
@@ -91,12 +130,12 @@ func (m *PaneMonitor) detectWaiting(paneID string) string {
 	}
 
 	// Content is stable — classify what Claude is waiting for
-	return classifyStablePane(content)
+	return m.classifyStablePane(content)
 }
 
 // classifyStablePane looks at a stable (non-changing) pane and determines
 // what kind of waiting state Claude is in.
-func classifyStablePane(content string) string {
+func (m *PaneMonitor) classifyStablePane(content string) string {
 	lines := strings.Split(content, "\n")
 
 	// Collect non-empty lines from the bottom (status area)
@@ -115,42 +154,42 @@ func classifyStablePane(content string) string {
 	bottom := strings.Join(bottomLines, "\n")
 
 	// --- Still working even though content is stable ---
-
-	// Tool execution that takes a while (e.g. long Bash command)
-	// Shows "Running…" in the tool output area
-	for _, line := range bottomLines {
-		if strings.HasSuffix(line, "…") && strings.Contains(line, "Running") {
-			return ""
+	for _, indicator := range m.Patterns.WorkingIndicators {
+		for _, line := range bottomLines {
+			match := true
+			if indicator.Contains != "" && !strings.Contains(line, indicator.Contains) {
+				match = false
+			}
+			if indicator.Suffix != "" && !strings.HasSuffix(line, indicator.Suffix) {
+				match = false
+			}
+			if match {
+				return ""
+			}
 		}
 	}
 
 	// --- Permission prompts ---
-
-	// Edit acceptance: "accept edits on (shift+tab to cycle)"
-	if strings.Contains(bottom, "accept edits") {
-		return "permission"
-	}
-
-	// Tool permission: Yes/No selector
-	if strings.Contains(bottom, "Yes") && strings.Contains(bottom, "No") {
-		return "permission"
-	}
-
-	// Tool permission: Allow/Deny selector
-	if strings.Contains(bottom, "Allow") && strings.Contains(bottom, "Deny") {
-		return "permission"
-	}
-
-	// "always allow" / "allow for this project" type prompts
-	if strings.Contains(bottom, "allow for") || strings.Contains(bottom, "Always allow") {
+	for _, pattern := range m.Patterns.PermissionPatterns {
+		if !strings.Contains(bottom, pattern) {
+			continue
+		}
+		// "Yes" requires "No" to also be present
+		if pattern == "Yes" && !strings.Contains(bottom, "No") {
+			continue
+		}
+		// "Allow" requires "Deny" to also be present
+		if pattern == "Allow" && !strings.Contains(bottom, "Deny") {
+			continue
+		}
 		return "permission"
 	}
 
 	// --- Idle at input prompt ---
-
-	// Claude is at the "❯" prompt waiting for user's next message
-	if strings.Contains(bottom, "for shortcuts") {
-		return "input"
+	for _, pattern := range m.Patterns.InputPatterns {
+		if strings.Contains(bottom, pattern) {
+			return "input"
+		}
 	}
 
 	// Fallback: content is stable and no working indicators found.

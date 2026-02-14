@@ -26,7 +26,10 @@ func SessionExists(name string) bool {
 
 func CreateSession(name string) error {
 	cmd := exec.Command("tmux", "new-session", "-d", "-s", name)
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("create tmux session %s: %w", name, err)
+	}
+	return nil
 }
 
 func AttachSession(name string) error {
@@ -34,9 +37,15 @@ func AttachSession(name string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("attach tmux session %s: %w", name, err)
+	}
+	return nil
 }
 
 func RenameWindow(target, name string) error {
-	return exec.Command("tmux", "rename-window", "-t", target, name).Run()
+	if err := exec.Command("tmux", "rename-window", "-t", target, name).Run(); err != nil {
+		return fmt.Errorf("rename tmux window %s to %s: %w", target, name, err)
+	}
+	return nil
 }
