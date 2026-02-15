@@ -16,6 +16,7 @@ const (
 	viewDashboard view = iota
 	viewSpawn
 	viewMerge
+	viewDismiss
 )
 
 type AppModel struct {
@@ -28,6 +29,7 @@ type AppModel struct {
 	dashboard dashboardModel
 	spawn     spawnModel
 	merge     mergeModel
+	dismiss   dismissModel
 
 	width  int
 	height int
@@ -57,6 +59,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dashboard.height = msg.Height
 		m.spawn.width = msg.Width
 		m.merge.width = msg.Width
+		m.dismiss.width = msg.Width
 		return m, nil
 
 	case tea.FocusMsg:
@@ -122,6 +125,32 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case mergeCancelMsg:
 		m.activeView = viewDashboard
 		return m, nil
+
+	case startDismissMsg:
+		m.activeView = viewDismiss
+		m.dismiss = newDismiss(m.orch, msg)
+		return m, nil
+
+	case dismissDoneMsg:
+		m.activeView = viewDashboard
+		// Adjust cursor after agent removal
+		agents := m.dashboard.sortedAgents()
+		if m.dashboard.cursor >= len(agents) && m.dashboard.cursor > 0 {
+			m.dashboard.cursor = len(agents) - 1
+		}
+		return m, nil
+
+	case dismissCancelMsg:
+		m.activeView = viewDashboard
+		return m, nil
+
+	case dismissErrorMsg:
+		if m.activeView == viewDismiss {
+			var cmd tea.Cmd
+			m.dismiss, cmd = m.dismiss.Update(msg)
+			return m, cmd
+		}
+		return m, nil
 	}
 
 	switch m.activeView {
@@ -131,6 +160,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateSpawn(msg)
 	case viewMerge:
 		return m.updateMerge(msg)
+	case viewDismiss:
+		return m.updateDismiss(msg)
 	}
 
 	return m, nil
@@ -165,12 +196,20 @@ func (m AppModel) updateMerge(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m AppModel) updateDismiss(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.dismiss, cmd = m.dismiss.Update(msg)
+	return m, cmd
+}
+
 func (m AppModel) View() string {
 	switch m.activeView {
 	case viewSpawn:
 		return m.viewSideBySide(m.spawn.ViewContent())
 	case viewMerge:
 		return m.viewSideBySide(m.merge.ViewContent())
+	case viewDismiss:
+		return m.viewSideBySide(m.dismiss.ViewContent())
 	default:
 		return m.dashboard.View()
 	}

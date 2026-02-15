@@ -48,12 +48,6 @@ type dashboardModel struct {
 	err           string
 	sortBy        sortMode
 
-	// Confirmation state for dismiss+delete
-	confirmDelete    bool
-	confirmAgentID   string
-	confirmAgentName string
-	confirmBranch    string
-
 }
 
 func newDashboard(orch *orchestrator.Orchestrator, store *agent.Store, repoPath, session string) dashboardModel {
@@ -211,24 +205,6 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	case tea.KeyMsg:
 		m.err = ""
 
-		// Handle confirmation prompt for dismiss+delete
-		if m.confirmDelete {
-			switch msg.String() {
-			case "y":
-				if err := m.orch.DismissAgent(m.confirmAgentID, true); err != nil {
-					m.err = err.Error()
-				}
-				agents := m.sortedAgents()
-				if m.cursor > 0 && m.cursor >= len(agents) {
-					m.cursor = len(agents) - 1
-				}
-				m.confirmDelete = false
-			case "n", "esc":
-				m.confirmDelete = false
-			}
-			return m, nil
-		}
-
 		agents := m.sortedAgents()
 
 		switch msg.String() {
@@ -292,11 +268,17 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "d":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				if err := m.orch.DismissAgent(a.ID, false); err != nil {
-					m.err = err.Error()
+				name := a.Name
+				if name == "" {
+					name = a.ID
 				}
-				if m.cursor > 0 && m.cursor >= len(agents)-1 {
-					m.cursor--
+				return m, func() tea.Msg {
+					return startDismissMsg{
+						agentID:      a.ID,
+						agentName:    name,
+						branch:       a.Branch,
+						deleteBranch: false,
+					}
 				}
 			}
 		case "c":
@@ -329,12 +311,17 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "D":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				m.confirmDelete = true
-				m.confirmAgentID = a.ID
-				m.confirmBranch = a.Branch
-				m.confirmAgentName = a.Name
-				if m.confirmAgentName == "" {
-					m.confirmAgentName = a.ID
+				name := a.Name
+				if name == "" {
+					name = a.ID
+				}
+				return m, func() tea.Msg {
+					return startDismissMsg{
+						agentID:      a.ID,
+						agentName:    name,
+						branch:       a.Branch,
+						deleteBranch: true,
+					}
 				}
 			}
 		}
@@ -512,16 +499,9 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	}
 
-	// Confirm delete prompt
-	if m.confirmDelete {
-		b.WriteString("\n")
-		b.WriteString(errorStyle.Render(fmt.Sprintf("  Delete branch %q for agent %s? (y/n)", m.confirmBranch, m.confirmAgentName)))
-		b.WriteString("\n")
-	}
-
 	// Help
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ m: merge │ d: dismiss │ D: dismiss+delete branch │ s: sort (%s) │ q: quit", m.sortLabel())))
+	b.WriteString(helpStyle.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ m: merge │ d: dismiss │ D: dismiss+delete │ s: sort (%s) │ q: quit", m.sortLabel())))
 
 	return b.String()
 }
