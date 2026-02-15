@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "a3",
+    "name": "",
+    "branch": "overview/merge",
+    "base_branch": "master",
+    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/overview/merge",
+    "tmux_window": "@37",
+    "tmux_pane_id": "%63",
+    "status": "reviewed",
+    "waiting_for": "",
+    "ever_active": true,
+    "exit_code": 0,
+    "started_at": "2026-02-15T13:33:10.066123+09:00",
+    "finished_at": "2026-02-15T13:55:10.824412+09:00",
+    "pre_review_commit": "0be8effda7e48fc776a4a9d524848b6995e9b9a1"
+  }
+]

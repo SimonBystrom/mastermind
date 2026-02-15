@@ -269,7 +269,9 @@ func (o *Orchestrator) StartMonitor() {
 			// Settled statuses only need pane-gone/dead detection above.
 			// Don't re-classify them based on pane content — the pattern
 			// matcher can produce false positives that demote these states.
-			if status == agent.StatusReviewed || status == agent.StatusReviewReady || status == agent.StatusDone {
+			// Note: StatusDone is NOT settled — the user may send another
+			// prompt, and we need to detect that the agent is running again.
+			if status == agent.StatusReviewed || status == agent.StatusReviewReady {
 				continue
 			}
 
@@ -396,7 +398,11 @@ func (o *Orchestrator) handleLazygitClosed(a *agent.Agent, status agent.Status) 
 		}
 	} else if status == agent.StatusConflicts {
 		if !git.HasChanges(a.WorktreePath) {
-			// Conflicts were resolved and committed
+			// Conflicts were resolved and committed on agent's branch.
+			// Fast-forward base to the agent's HEAD before cleanup.
+			if err := o.ffMergeBase(a); err != nil {
+				slog.Error("ff merge base after conflict resolution failed", "id", a.ID, "error", err)
+			}
 			if err := o.cleanupAfterMerge(a); err != nil {
 				slog.Error("cleanup after merge failed", "id", a.ID, "error", err)
 			}
@@ -418,50 +424,11 @@ func (o *Orchestrator) MergeAgent(id string) MergeResultMsg {
 		return MergeResultMsg{AgentID: id, Error: "uncommitted changes in worktree — commit or discard them first"}
 	}
 
-	agentHead, err := git.HeadCommit(a.WorktreePath, "HEAD")
-	if err != nil {
-		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("get agent HEAD: %v", err)}
-	}
-
-	baseHead, err := git.HeadCommit(o.repoPath, a.BaseBranch)
-	if err != nil {
-		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("get base HEAD: %v", err)}
-	}
-
-	// Fast-forward: base is ancestor of agent
-	if git.IsAncestor(o.repoPath, baseHead, agentHead) {
-		// If the base branch is checked out somewhere, merge there so the
-		// working tree gets updated. Otherwise just move the ref.
-		if wtPath := git.WorktreeForBranch(o.repoPath, a.BaseBranch); wtPath != "" {
-			if err := git.MergeFFOnly(wtPath, a.Branch); err != nil {
-				return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("fast-forward merge: %v", err)}
-			}
-		} else {
-			if err := git.UpdateBranchRef(o.repoPath, a.BaseBranch, agentHead); err != nil {
-				return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("fast-forward update: %v", err)}
-			}
-		}
-		slog.Info("fast-forward merge", "id", a.ID, "branch", a.Branch, "base", a.BaseBranch)
-		if err := o.cleanupAfterMerge(a); err != nil {
-			return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("cleanup: %v", err)}
-		}
-		return MergeResultMsg{AgentID: id, Success: true}
-	}
-
-	// Non-fast-forward: need to do a real merge
-	checkedOut, err := git.IsBranchCheckedOut(o.repoPath, a.BaseBranch)
-	if err != nil {
-		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("check branch checkout: %v", err)}
-	}
-	if checkedOut {
-		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("base branch %q is checked out in another worktree — switch away first", a.BaseBranch)}
-	}
-
-	if err := git.CheckoutBranch(a.WorktreePath, a.BaseBranch); err != nil {
-		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("checkout base: %v", err)}
-	}
-
-	conflicted, err := git.MergeInWorktree(a.WorktreePath, a.Branch)
+	// Merge base into the agent's branch. If base is already an ancestor
+	// this is a no-op ("Already up to date"). Otherwise it creates a merge
+	// commit on the agent's branch, making it a superset of base. Either
+	// way the agent branch ends up FF-able onto base.
+	conflicted, err := git.MergeInWorktree(a.WorktreePath, a.BaseBranch)
 	if err != nil {
 		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("merge: %v", err)}
 	}
@@ -471,11 +438,36 @@ func (o *Orchestrator) MergeAgent(id string) MergeResultMsg {
 		return MergeResultMsg{AgentID: id, Conflict: true}
 	}
 
+	// Fast-forward base to the agent's HEAD.
+	if err := o.ffMergeBase(a); err != nil {
+		return MergeResultMsg{AgentID: id, Error: err.Error()}
+	}
+
 	slog.Info("merge completed", "id", a.ID, "branch", a.Branch, "base", a.BaseBranch)
 	if err := o.cleanupAfterMerge(a); err != nil {
 		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("cleanup: %v", err)}
 	}
 	return MergeResultMsg{AgentID: id, Success: true}
+}
+
+// ffMergeBase fast-forwards the base branch to the agent's current HEAD.
+// This is used after the agent's branch has incorporated base (via merge),
+// making it a strict superset that can be fast-forwarded.
+func (o *Orchestrator) ffMergeBase(a *agent.Agent) error {
+	agentHead, err := git.HeadCommit(a.WorktreePath, "HEAD")
+	if err != nil {
+		return fmt.Errorf("get agent HEAD: %v", err)
+	}
+	if wtPath := git.WorktreeForBranch(o.repoPath, a.BaseBranch); wtPath != "" {
+		if err := git.MergeFFOnly(wtPath, a.Branch); err != nil {
+			return fmt.Errorf("fast-forward merge: %v", err)
+		}
+	} else {
+		if err := git.UpdateBranchRef(o.repoPath, a.BaseBranch, agentHead); err != nil {
+			return fmt.Errorf("fast-forward update: %v", err)
+		}
+	}
+	return nil
 }
 
 func (o *Orchestrator) cleanupAfterMerge(a *agent.Agent) error {
