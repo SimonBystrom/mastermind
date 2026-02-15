@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,31 @@ func RemoveWorktree(repoPath, wtPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree %s: %w", wtPath, err)
 	}
+
+	// Prune stale worktree metadata
+	_ = exec.Command("git", "-C", repoPath, "worktree", "prune").Run()
+
+	// Remove empty parent directories up to (but not including) the worktrees root
+	worktreesRoot := filepath.Join(repoPath, ".worktrees")
+	removeEmptyParents(wtPath, worktreesRoot)
+
 	return nil
+}
+
+// removeEmptyParents removes empty directories starting from dir, walking up
+// to (but not including) stopAt.
+func removeEmptyParents(dir, stopAt string) {
+	for {
+		dir = filepath.Dir(dir)
+		if dir == stopAt || dir == "." || dir == "/" {
+			return
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			return
+		}
+		os.Remove(dir)
+	}
 }
 
 type Worktree struct {
