@@ -86,6 +86,13 @@ func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch 
 		}
 	}
 
+	// Guard against branch already checked out in another worktree (e.g. the main working tree)
+	if !createBranch {
+		if checkedOut, err := git.IsBranchCheckedOut(o.repoPath, branch); err == nil && checkedOut {
+			return fmt.Errorf("branch %q is already checked out in another worktree", branch)
+		}
+	}
+
 	if createBranch {
 		if err := git.CreateBranch(o.repoPath, branch, baseBranch); err != nil {
 			return fmt.Errorf("create branch: %w", err)

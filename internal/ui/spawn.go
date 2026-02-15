@@ -40,9 +40,10 @@ type spawnModel struct {
 	modeCursor int
 
 	// Branch picker (used for both existing branch and base branch selection)
-	branches     []git.Branch
-	branchCursor int
-	branchFilter textinput.Model
+	branches           []git.Branch
+	checkedOutBranches map[string]bool
+	branchCursor       int
+	branchFilter       textinput.Model
 
 	// New branch name input
 	branchInput textinput.Model
@@ -104,6 +105,14 @@ func (m spawnModel) Update(msg tea.Msg) (spawnModel, tea.Cmd) {
 			return m, nil
 		}
 		m.branches = msg.branches
+		m.checkedOutBranches = make(map[string]bool)
+		if worktrees, err := git.ListWorktrees(m.repoPath); err == nil {
+			for _, wt := range worktrees {
+				if wt.Branch != "" {
+					m.checkedOutBranches[wt.Branch] = true
+				}
+			}
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -263,12 +272,13 @@ func (m spawnModel) updateConfirm(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 
 func (m spawnModel) filteredBranches() []git.Branch {
 	filter := strings.ToLower(strings.TrimSpace(m.branchFilter.Value()))
-	if filter == "" {
-		return m.branches
-	}
 	var result []git.Branch
 	for _, b := range m.branches {
-		if strings.Contains(strings.ToLower(b.Name), filter) {
+		// In existing branch mode, hide branches already checked out in a worktree
+		if m.mode == modeExisting && m.checkedOutBranches[b.Name] {
+			continue
+		}
+		if filter == "" || strings.Contains(strings.ToLower(b.Name), filter) {
 			result = append(result, b)
 		}
 	}
