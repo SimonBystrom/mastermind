@@ -33,11 +33,14 @@ var DefaultPatterns = MonitorPatterns{
 		{Contains: "Running", Suffix: "…"},
 	},
 	PermissionPatterns: []PatternRule{
+		// Tool permission prompts
 		{Contains: "accept edits"},
 		{Contains: "Yes", RequiresAlso: "No"},
 		{Contains: "Allow", RequiresAlso: "Deny"},
 		{Contains: "allow for"},
 		{Contains: "Always allow"},
+		// AskUserQuestion prompts (numbered options + "Chat about this")
+		{Contains: "Chat about this"},
 	},
 	InputPatterns: []PatternRule{
 		{Contains: "for shortcuts"},
