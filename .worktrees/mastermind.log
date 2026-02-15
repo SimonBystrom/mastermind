@@ -406,3 +406,14 @@ time=2026-02-15T17:29:50.733+09:00 level=DEBUG msg="agent status change" id=a1 s
 time=2026-02-15T17:29:54.755+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
 time=2026-02-15T17:30:16.735+09:00 level=DEBUG msg="agent status change" id=a1 status=running
 time=2026-02-15T17:30:46.773+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-15T17:34:20.887+09:00 level=INFO msg="agent cleaned up after merge" id=a1 removeWorktree=true deleteBranch=true
+time=2026-02-15T17:36:47.447+09:00 level=INFO msg="agent spawned" id=a2 branch=tests/visuals name=""
+time=2026-02-15T17:38:40.754+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
+time=2026-02-15T17:39:08.735+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-15T17:39:16.738+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
+time=2026-02-15T17:40:10.764+09:00 level=INFO msg="agent idle with changes" id=a2
+time=2026-02-15T17:40:12.728+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-15T17:40:18.771+09:00 level=INFO msg="agent idle with changes" id=a2
+time=2026-02-15T20:25:41.283+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-15T20:25:42.505+09:00 level=INFO msg="merge completed" id=a2 branch=tests/visuals base=master
+time=2026-02-15T20:25:42.545+09:00 level=INFO msg="agent cleaned up after merge" id=a2 removeWorktree=true deleteBranch=true
