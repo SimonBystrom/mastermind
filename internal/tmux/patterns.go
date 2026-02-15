@@ -13,6 +13,11 @@ type MonitorPatterns struct {
 	// indicate Claude is still working (even if content is stable).
 	WorkingIndicators []PatternRule
 
+	// EarlyPermissionPatterns are simple substring patterns checked before
+	// content stabilizes. Only include strings that unambiguously indicate
+	// a permission prompt to avoid false positives on changing content.
+	EarlyPermissionPatterns []string
+
 	// PermissionPatterns are patterns that indicate a permission prompt.
 	PermissionPatterns []PatternRule
 
@@ -31,6 +36,10 @@ type PaneStatus struct {
 var DefaultPatterns = MonitorPatterns{
 	WorkingIndicators: []PatternRule{
 		{Contains: "Running", Suffix: "…"},
+	},
+	EarlyPermissionPatterns: []string{
+		"Do you want to proceed?",
+		"Esc to cancel",
 	},
 	PermissionPatterns: []PatternRule{
 		// Tool permission prompts

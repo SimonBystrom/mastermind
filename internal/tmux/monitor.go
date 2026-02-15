@@ -80,6 +80,13 @@ func (m *PaneMonitor) detectWaiting(paneID string) string {
 	stable := m.stableCount[paneID]
 	m.mu.Unlock()
 
+	// Check for high-confidence permission patterns even before content
+	// stabilizes — some prompts have subtle animation (cursor, spinner)
+	// that prevents the hash from settling.
+	if waiting := m.classifyUnstablePane(content); waiting != "" {
+		return waiting
+	}
+
 	// Content is still changing — Claude is actively working
 	// Require 2 consecutive stable polls (~4 seconds) before declaring waiting
 	if stable < 2 {
@@ -88,6 +95,19 @@ func (m *PaneMonitor) detectWaiting(paneID string) string {
 
 	// Content is stable — classify what Claude is waiting for
 	return m.classifyStablePane(content)
+}
+
+// classifyUnstablePane checks for high-confidence patterns that indicate
+// a permission prompt even when pane content hasn't stabilized (e.g. due
+// to cursor animation). Only returns non-empty for patterns that are
+// unambiguous enough to trust without stability confirmation.
+func (m *PaneMonitor) classifyUnstablePane(content string) string {
+	for _, pattern := range m.Patterns.EarlyPermissionPatterns {
+		if strings.Contains(content, pattern) {
+			return "permission"
+		}
+	}
+	return ""
 }
 
 // classifyStablePane looks at a stable (non-changing) pane and determines

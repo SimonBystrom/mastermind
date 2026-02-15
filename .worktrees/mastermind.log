@@ -376,3 +376,11 @@ time=2026-02-15T16:25:37.265+09:00 level=DEBUG msg="agent status change" id=a1 s
 time=2026-02-15T16:27:11.280+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
 time=2026-02-15T16:29:11.257+09:00 level=DEBUG msg="agent status change" id=a1 status=running
 time=2026-02-15T16:31:21.293+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-15T16:34:33.252+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T16:35:25.277+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-15T16:36:21.264+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T16:37:17.274+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-15T16:37:21.257+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T16:40:59.292+09:00 level=INFO msg="agent idle with changes" id=a1
+time=2026-02-15T16:41:18.272+09:00 level=INFO msg="merge completed" id=a1 branch=dismiss/logic base=master
+time=2026-02-15T16:41:18.309+09:00 level=INFO msg="agent cleaned up after merge" id=a1 removeWorktree=true deleteBranch=true
