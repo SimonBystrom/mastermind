@@ -54,12 +54,6 @@ type dashboardModel struct {
 	confirmAgentName string
 	confirmBranch    string
 
-	// Confirmation state for merge
-	confirmMerge    bool
-	mergeAgentID    string
-	mergeAgentName  string
-	mergeBranch     string
-	mergeBaseBranch string
 }
 
 func newDashboard(orch *orchestrator.Orchestrator, store *agent.Store, repoPath, session string) dashboardModel {
@@ -235,21 +229,6 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			return m, nil
 		}
 
-		// Handle confirmation prompt for merge
-		if m.confirmMerge {
-			switch msg.String() {
-			case "y":
-				mergeID := m.mergeAgentID
-				m.confirmMerge = false
-				return m, func() tea.Msg {
-					return m.orch.MergeAgent(mergeID)
-				}
-			case "n", "esc":
-				m.confirmMerge = false
-			}
-			return m, nil
-		}
-
 		agents := m.sortedAgents()
 
 		switch msg.String() {
@@ -296,13 +275,17 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 				a := agents[m.cursor]
 				status := a.GetStatus()
 				if status == agent.StatusReviewed || status == agent.StatusReviewReady {
-					m.confirmMerge = true
-					m.mergeAgentID = a.ID
-					m.mergeBranch = a.Branch
-					m.mergeBaseBranch = a.BaseBranch
-					m.mergeAgentName = a.Name
-					if m.mergeAgentName == "" {
-						m.mergeAgentName = a.ID
+					name := a.Name
+					if name == "" {
+						name = a.ID
+					}
+					return m, func() tea.Msg {
+						return startMergeMsg{
+							agentID:    a.ID,
+							agentName:  name,
+							branch:     a.Branch,
+							baseBranch: a.BaseBranch,
+						}
 					}
 				}
 			}
@@ -533,13 +516,6 @@ func (m dashboardModel) ViewContent() string {
 	if m.confirmDelete {
 		b.WriteString("\n")
 		b.WriteString(errorStyle.Render(fmt.Sprintf("  Delete branch %q for agent %s? (y/n)", m.confirmBranch, m.confirmAgentName)))
-		b.WriteString("\n")
-	}
-
-	// Confirm merge prompt
-	if m.confirmMerge {
-		b.WriteString("\n")
-		b.WriteString(reviewedStyle.Render(fmt.Sprintf("  Merge %s into %s? (y/n)", m.mergeBranch, m.mergeBaseBranch)))
 		b.WriteString("\n")
 	}
 

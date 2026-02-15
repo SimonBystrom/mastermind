@@ -15,6 +15,7 @@ type view int
 const (
 	viewDashboard view = iota
 	viewSpawn
+	viewMerge
 )
 
 type AppModel struct {
@@ -26,6 +27,7 @@ type AppModel struct {
 
 	dashboard dashboardModel
 	spawn     spawnModel
+	merge     mergeModel
 
 	width  int
 	height int
@@ -54,6 +56,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dashboard.width = msg.Width
 		m.dashboard.height = msg.Height
 		m.spawn.width = msg.Width
+		m.merge.width = msg.Width
 		return m, nil
 
 	case tea.FocusMsg:
@@ -88,6 +91,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case orchestrator.MergeResultMsg:
 		m.dashboard, _ = m.dashboard.Update(msg)
+		if m.activeView == viewMerge {
+			var cmd tea.Cmd
+			m.merge, cmd = m.merge.Update(msg)
+			return m, cmd
+		}
 		return m, nil
 
 	case orchestrator.CleanupMsg:
@@ -101,6 +109,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spawnCancelMsg:
 		m.activeView = viewDashboard
 		return m, nil
+
+	case startMergeMsg:
+		m.activeView = viewMerge
+		m.merge = newMerge(m.orch, m.repoPath, msg)
+		return m, nil
+
+	case mergeDoneMsg:
+		m.activeView = viewDashboard
+		return m, nil
+
+	case mergeCancelMsg:
+		m.activeView = viewDashboard
+		return m, nil
 	}
 
 	switch m.activeView {
@@ -108,6 +129,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateDashboard(msg)
 	case viewSpawn:
 		return m.updateSpawn(msg)
+	case viewMerge:
+		return m.updateMerge(msg)
 	}
 
 	return m, nil
@@ -136,34 +159,42 @@ func (m AppModel) updateSpawn(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m AppModel) updateMerge(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.merge, cmd = m.merge.Update(msg)
+	return m, cmd
+}
+
 func (m AppModel) View() string {
 	switch m.activeView {
 	case viewSpawn:
-		return m.viewSideBySide()
+		return m.viewSideBySide(m.spawn.ViewContent())
+	case viewMerge:
+		return m.viewSideBySide(m.merge.ViewContent())
 	default:
 		return m.dashboard.View()
 	}
 }
 
-func (m AppModel) viewSideBySide() string {
+func (m AppModel) viewSideBySide(rightPanel string) string {
 	maxWidth := m.width - 4
 	if maxWidth < 40 {
 		maxWidth = 80
 	}
 
-	// 55% for dashboard, 45% for spawn, minus 1 for separator
+	// 55% for dashboard, 45% for right panel, minus 1 for separator
 	dashWidth := maxWidth * 55 / 100
-	spawnWidth := maxWidth - dashWidth - 1
+	panelWidth := maxWidth - dashWidth - 1
 
 	dashContent := lipgloss.NewStyle().Width(dashWidth).Render(m.dashboard.ViewContent())
-	spawnContent := lipgloss.NewStyle().Width(spawnWidth).Render(m.spawn.ViewContent())
+	panelContent := lipgloss.NewStyle().Width(panelWidth).Render(rightPanel)
 
 	// Build a vertical separator matching the height of the taller panel
 	dashHeight := lipgloss.Height(dashContent)
-	spawnHeight := lipgloss.Height(spawnContent)
+	panelHeight := lipgloss.Height(panelContent)
 	sepHeight := dashHeight
-	if spawnHeight > sepHeight {
-		sepHeight = spawnHeight
+	if panelHeight > sepHeight {
+		sepHeight = panelHeight
 	}
 	sepLines := make([]string, sepHeight)
 	for i := range sepLines {
@@ -171,7 +202,7 @@ func (m AppModel) viewSideBySide() string {
 	}
 	sep := separatorStyle.Render(strings.Join(sepLines, "\n"))
 
-	joined := lipgloss.JoinHorizontal(lipgloss.Top, dashContent, sep, spawnContent)
+	joined := lipgloss.JoinHorizontal(lipgloss.Top, dashContent, sep, panelContent)
 
 	return borderStyle.Width(maxWidth).Render(joined)
 }
