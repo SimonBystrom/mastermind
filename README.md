@@ -120,3 +120,29 @@ review ready → reviewing (lazygit open) → reviewed (commits made)
 5. **Dismiss** — tears down the tmux window, removes the worktree, optionally deletes the branch.
 
 Agent state is persisted to `.worktrees/mastermind-state.json` and agents are recovered on restart. Logs are written to `.worktrees/mastermind.log`.
+
+## Testing
+
+Run all tests:
+
+```bash
+go test ./...
+```
+
+Run with race detection:
+
+```bash
+go test -race ./...
+```
+
+Run by package:
+
+```bash
+go test ./internal/agent/...        # agent, store, persistence
+go test ./internal/tmux/...         # pane classification patterns
+go test ./internal/git/...          # real git operations (requires git)
+go test ./internal/orchestrator/... # orchestrator with mocks + integration
+go test ./internal/ui/...           # TUI model tests
+```
+
+The test suite uses real git repos (via `t.TempDir()`) for git operations and mock interfaces for tmux — no running tmux or Claude instances are needed.

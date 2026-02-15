@@ -58,12 +58,32 @@ type Orchestrator struct {
 	session     string
 	worktreeDir string
 	program     *tea.Program
-	monitor     *tmux.PaneMonitor
+	monitor     tmux.PaneStatusChecker
 	statePath   string
+	git         git.GitOps
+	tmux        tmux.TmuxOps
 }
 
-func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string) *Orchestrator {
-	return &Orchestrator{
+// Option configures an Orchestrator.
+type Option func(*Orchestrator)
+
+// WithGit overrides the default git implementation.
+func WithGit(g git.GitOps) Option {
+	return func(o *Orchestrator) { o.git = g }
+}
+
+// WithTmux overrides the default tmux implementation.
+func WithTmux(t tmux.TmuxOps) Option {
+	return func(o *Orchestrator) { o.tmux = t }
+}
+
+// WithMonitor overrides the default pane monitor.
+func WithMonitor(m tmux.PaneStatusChecker) Option {
+	return func(o *Orchestrator) { o.monitor = m }
+}
+
+func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
+	o := &Orchestrator{
 		ctx:         ctx,
 		store:       store,
 		repoPath:    repoPath,
@@ -71,7 +91,13 @@ func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir
 		worktreeDir: worktreeDir,
 		monitor:     tmux.NewPaneMonitor(),
 		statePath:   worktreeDir + "/mastermind-state.json",
+		git:         git.RealGit{},
+		tmux:        tmux.RealTmux{},
 	}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
 }
 
 func (o *Orchestrator) SetProgram(p *tea.Program) {
@@ -88,18 +114,18 @@ func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch 
 
 	// Guard against branch already checked out in another worktree (e.g. the main working tree)
 	if !createBranch {
-		if checkedOut, err := git.IsBranchCheckedOut(o.repoPath, branch); err == nil && checkedOut {
+		if checkedOut, err := o.git.IsBranchCheckedOut(o.repoPath, branch); err == nil && checkedOut {
 			return fmt.Errorf("branch %q is already checked out in another worktree", branch)
 		}
 	}
 
 	if createBranch {
-		if err := git.CreateBranch(o.repoPath, branch, baseBranch); err != nil {
+		if err := o.git.CreateBranch(o.repoPath, branch, baseBranch); err != nil {
 			return fmt.Errorf("create branch: %w", err)
 		}
 	}
 
-	wtPath, err := git.CreateWorktree(o.repoPath, o.worktreeDir, branch)
+	wtPath, err := o.git.CreateWorktree(o.repoPath, o.worktreeDir, branch)
 	if err != nil {
 		return fmt.Errorf("create worktree: %w", err)
 	}
@@ -109,13 +135,13 @@ func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch 
 		windowName = branch
 	}
 
-	paneID, err := tmux.NewWindow(o.session, windowName, wtPath, []string{"claude"})
+	paneID, err := o.tmux.NewWindow(o.session, windowName, wtPath, []string{"claude"})
 	if err != nil {
-		git.RemoveWorktree(o.repoPath, wtPath)
+		o.git.RemoveWorktree(o.repoPath, wtPath)
 		return fmt.Errorf("create tmux window: %w", err)
 	}
 
-	windowID, _ := tmux.WindowIDForPane(paneID)
+	windowID, _ := o.tmux.WindowIDForPane(paneID)
 
 	a := agent.NewAgent(name, branch, baseBranch, wtPath, windowID, paneID)
 	o.store.Add(a)
@@ -137,12 +163,12 @@ func (o *Orchestrator) DismissAgent(id string, deleteBranch bool) error {
 	}
 
 	// Gracefully stop Claude if the pane is still alive
-	if a.TmuxPaneID != "" && tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
+	if a.TmuxPaneID != "" && o.tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
 		status := a.GetStatus()
 		if status == agent.StatusRunning || status == agent.StatusWaiting {
 			// Send Ctrl+C to interrupt, then /exit to quit cleanly
-			tmux.SendKeys(a.TmuxPaneID, "C-c")
-			tmux.SendKeys(a.TmuxPaneID, "/exit", "Enter")
+			o.tmux.SendKeys(a.TmuxPaneID, "C-c")
+			o.tmux.SendKeys(a.TmuxPaneID, "/exit", "Enter")
 			// Give Claude a moment to shut down
 			time.Sleep(500 * time.Millisecond)
 		}
@@ -150,19 +176,19 @@ func (o *Orchestrator) DismissAgent(id string, deleteBranch bool) error {
 
 	// Kill lazygit pane if open
 	if lgPane := a.GetLazygitPaneID(); lgPane != "" {
-		tmux.KillPane(lgPane)
+		o.tmux.KillPane(lgPane)
 	}
 
 	if a.TmuxWindow != "" {
-		tmux.KillWindow(a.TmuxWindow)
+		o.tmux.KillWindow(a.TmuxWindow)
 	}
 
 	if a.WorktreePath != "" {
-		git.RemoveWorktree(o.repoPath, a.WorktreePath)
+		o.git.RemoveWorktree(o.repoPath, a.WorktreePath)
 	}
 
 	if deleteBranch && a.Branch != "" {
-		git.DeleteBranch(o.repoPath, a.Branch)
+		o.git.DeleteBranch(o.repoPath, a.Branch)
 	}
 
 	o.store.Remove(id)
@@ -179,10 +205,10 @@ func (o *Orchestrator) FocusAgent(id string) error {
 		return fmt.Errorf("agent %s not found", id)
 	}
 
-	if err := tmux.SelectWindow(a.TmuxWindow); err != nil {
+	if err := o.tmux.SelectWindow(a.TmuxWindow); err != nil {
 		return fmt.Errorf("select window: %w", err)
 	}
-	return tmux.SelectPane(a.TmuxPaneID)
+	return o.tmux.SelectPane(a.TmuxPaneID)
 }
 
 func (o *Orchestrator) OpenLazyGit(id string) error {
@@ -191,12 +217,12 @@ func (o *Orchestrator) OpenLazyGit(id string) error {
 		return fmt.Errorf("agent %s not found", id)
 	}
 
-	if err := tmux.SelectWindow(a.TmuxWindow); err != nil {
+	if err := o.tmux.SelectWindow(a.TmuxWindow); err != nil {
 		return fmt.Errorf("select window: %w", err)
 	}
 
 	// Record HEAD before review starts
-	head, err := git.HeadCommit(a.WorktreePath, "HEAD")
+	head, err := o.git.HeadCommit(a.WorktreePath, "HEAD")
 	if err != nil {
 		return fmt.Errorf("get head commit: %w", err)
 	}
@@ -206,7 +232,7 @@ func (o *Orchestrator) OpenLazyGit(id string) error {
 	if shell == "" {
 		shell = "/bin/bash"
 	}
-	paneID, err := tmux.SplitWindow(a.TmuxPaneID, a.WorktreePath, true, 80, []string{shell, "-lc", "export GPG_TTY=$(tty); exec lazygit"})
+	paneID, err := o.tmux.SplitWindow(a.TmuxPaneID, a.WorktreePath, true, 80, []string{shell, "-lc", "export GPG_TTY=$(tty); exec lazygit"})
 	if err != nil {
 		return fmt.Errorf("split window for lazygit: %w", err)
 	}
@@ -234,7 +260,7 @@ func (o *Orchestrator) StartMonitor() {
 
 			// Handle lazygit pane detection for reviewing/conflicts agents
 			if (status == agent.StatusReviewing || status == agent.StatusConflicts) && a.GetLazygitPaneID() != "" {
-				lgGone := !tmux.PaneExistsInWindow(a.GetLazygitPaneID(), a.TmuxWindow)
+				lgGone := !o.tmux.PaneExistsInWindow(a.GetLazygitPaneID(), a.TmuxWindow)
 				if !lgGone {
 					// Pane exists but may be dead (remain-on-exit keeps it around).
 					lgStatus, err := o.monitor.GetPaneStatus(a.GetLazygitPaneID())
@@ -242,7 +268,7 @@ func (o *Orchestrator) StartMonitor() {
 				}
 				if lgGone {
 					// Kill the dead lazygit pane if it's still lingering
-					tmux.KillPane(a.GetLazygitPaneID())
+					o.tmux.KillPane(a.GetLazygitPaneID())
 					o.handleLazygitClosed(a, status)
 				}
 				continue
@@ -278,7 +304,7 @@ func (o *Orchestrator) StartMonitor() {
 			// another prompt to any agent, so we always need to re-classify
 			// pane content to detect when an idle agent starts working again.
 
-			if paneStatus.WaitingFor != "" && a.GetEverActive() && git.HasChanges(a.WorktreePath) {
+			if paneStatus.WaitingFor != "" && a.GetEverActive() && o.git.HasChanges(a.WorktreePath) {
 				// Agent was active and has changes — review ready, regardless
 				// of what the pattern matcher thinks (avoids false "permission"
 				// detection when Claude is actually idle with changes).
@@ -329,7 +355,7 @@ func (o *Orchestrator) StartMonitor() {
 func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 	a.SetFinished(exitCode, time.Now())
 
-	hasChanges := git.HasChanges(a.WorktreePath)
+	hasChanges := o.git.HasChanges(a.WorktreePath)
 	if hasChanges {
 		a.SetStatus(agent.StatusReviewReady)
 	} else {
@@ -348,7 +374,7 @@ func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 }
 
 func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
-	hasChanges := git.HasChanges(a.WorktreePath)
+	hasChanges := o.git.HasChanges(a.WorktreePath)
 	if hasChanges {
 		if a.GetStatus() != agent.StatusReviewReady {
 			a.SetStatus(agent.StatusReviewReady)
@@ -380,7 +406,7 @@ func (o *Orchestrator) handleLazygitClosed(a *agent.Agent, status agent.Status) 
 	a.SetLazygitPaneID("")
 
 	if status == agent.StatusReviewing {
-		currentHead, err := git.HeadCommit(a.WorktreePath, "HEAD")
+		currentHead, err := o.git.HeadCommit(a.WorktreePath, "HEAD")
 		if err != nil {
 			slog.Error("failed to get head after review", "id", a.ID, "error", err)
 			a.SetStatus(agent.StatusReviewReady)
@@ -400,7 +426,7 @@ func (o *Orchestrator) handleLazygitClosed(a *agent.Agent, status agent.Status) 
 			}
 		}
 	} else if status == agent.StatusConflicts {
-		if !git.HasChanges(a.WorktreePath) {
+		if !o.git.HasChanges(a.WorktreePath) {
 			// Conflicts were resolved and committed on agent's branch.
 			// Fast-forward base to the agent's HEAD before cleanup.
 			if err := o.ffMergeBase(a); err != nil {
@@ -427,7 +453,7 @@ func (o *Orchestrator) MergeAgent(id string, deleteBranch, removeWorktree bool) 
 	a.SetMergeDeleteBranch(deleteBranch)
 	a.SetMergeRemoveWorktree(removeWorktree)
 
-	if git.HasChanges(a.WorktreePath) {
+	if o.git.HasChanges(a.WorktreePath) {
 		return MergeResultMsg{AgentID: id, Error: "uncommitted changes in worktree — commit or discard them first"}
 	}
 
@@ -435,14 +461,14 @@ func (o *Orchestrator) MergeAgent(id string, deleteBranch, removeWorktree bool) 
 	// this is a no-op ("Already up to date"). Otherwise it creates a merge
 	// commit on the agent's branch, making it a superset of base. Either
 	// way the agent branch ends up FF-able onto base.
-	conflicted, err := git.MergeInWorktree(a.WorktreePath, a.BaseBranch)
+	conflicted, err := o.git.MergeInWorktree(a.WorktreePath, a.BaseBranch)
 	if err != nil {
 		return MergeResultMsg{AgentID: id, Error: fmt.Sprintf("merge: %v", err)}
 	}
 
 	if conflicted {
 		a.SetStatus(agent.StatusConflicts)
-		conflictFiles, _ := git.ConflictFiles(a.WorktreePath)
+		conflictFiles, _ := o.git.ConflictFiles(a.WorktreePath)
 		return MergeResultMsg{AgentID: id, Conflict: true, ConflictFiles: conflictFiles}
 	}
 
@@ -462,16 +488,16 @@ func (o *Orchestrator) MergeAgent(id string, deleteBranch, removeWorktree bool) 
 // This is used after the agent's branch has incorporated base (via merge),
 // making it a strict superset that can be fast-forwarded.
 func (o *Orchestrator) ffMergeBase(a *agent.Agent) error {
-	agentHead, err := git.HeadCommit(a.WorktreePath, "HEAD")
+	agentHead, err := o.git.HeadCommit(a.WorktreePath, "HEAD")
 	if err != nil {
 		return fmt.Errorf("get agent HEAD: %v", err)
 	}
-	if wtPath := git.WorktreeForBranch(o.repoPath, a.BaseBranch); wtPath != "" {
-		if err := git.MergeFFOnly(wtPath, a.Branch); err != nil {
+	if wtPath := o.git.WorktreeForBranch(o.repoPath, a.BaseBranch); wtPath != "" {
+		if err := o.git.MergeFFOnly(wtPath, a.Branch); err != nil {
 			return fmt.Errorf("fast-forward merge: %v", err)
 		}
 	} else {
-		if err := git.UpdateBranchRef(o.repoPath, a.BaseBranch, agentHead); err != nil {
+		if err := o.git.UpdateBranchRef(o.repoPath, a.BaseBranch, agentHead); err != nil {
 			return fmt.Errorf("fast-forward update: %v", err)
 		}
 	}
@@ -487,14 +513,14 @@ func (o *Orchestrator) cleanupAfterMerge(a *agent.Agent) error {
 	}
 	if removeWorktree {
 		if a.TmuxWindow != "" {
-			tmux.KillWindow(a.TmuxWindow)
+			o.tmux.KillWindow(a.TmuxWindow)
 		}
 		if a.WorktreePath != "" {
-			git.RemoveWorktree(o.repoPath, a.WorktreePath)
+			o.git.RemoveWorktree(o.repoPath, a.WorktreePath)
 		}
 	}
 	if deleteBranch && a.Branch != "" {
-		git.DeleteBranch(o.repoPath, a.Branch)
+		o.git.DeleteBranch(o.repoPath, a.Branch)
 	}
 	o.store.Remove(a.ID)
 	slog.Info("agent cleaned up after merge", "id", a.ID, "removeWorktree", removeWorktree, "deleteBranch", deleteBranch)
@@ -511,11 +537,11 @@ func (o *Orchestrator) CleanupDeadAgents() []CleanupResult {
 		}
 
 		var reason string
-		if !tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
+		if !o.tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
 			reason = "pane gone"
 		} else if _, err := os.Stat(a.WorktreePath); os.IsNotExist(err) {
 			reason = "worktree missing"
-		} else if a.BaseBranch != "" && git.IsBranchMerged(o.repoPath, a.Branch, a.BaseBranch) {
+		} else if a.BaseBranch != "" && o.git.IsBranchMerged(o.repoPath, a.Branch, a.BaseBranch) {
 			reason = "branch merged"
 		}
 
@@ -550,7 +576,7 @@ func (o *Orchestrator) RecoverAgents() {
 	recovered := 0
 	for _, pa := range persisted {
 		// Check if the tmux pane still exists
-		if !tmux.PaneExistsInWindow(pa.TmuxPaneID, pa.TmuxWindow) {
+		if !o.tmux.PaneExistsInWindow(pa.TmuxPaneID, pa.TmuxWindow) {
 			slog.Debug("skipping stale agent, pane gone", "id", pa.ID, "pane", pa.TmuxPaneID)
 			continue
 		}
