@@ -68,6 +68,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Ensure .worktrees/ is excluded from git tracking via .git/info/exclude
+	if err := ensureGitExclude(absRepo, ".worktrees/"); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not update .git/info/exclude: %v\n", err)
+	}
+
 	// Set up persistent logging
 	logPath := filepath.Join(worktreeDir, "mastermind.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
@@ -166,4 +171,41 @@ func detectTmuxSession() (string, error) {
 		return "", fmt.Errorf("empty session name")
 	}
 	return name, nil
+}
+
+func ensureGitExclude(repoPath, pattern string) error {
+	excludePath := filepath.Join(repoPath, ".git", "info", "exclude")
+
+	// Ensure the directory exists
+	if err := os.MkdirAll(filepath.Dir(excludePath), 0o755); err != nil {
+		return err
+	}
+
+	// Read existing content
+	content, err := os.ReadFile(excludePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	// Check if pattern is already present
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.TrimSpace(line) == pattern {
+			return nil
+		}
+	}
+
+	// Append the pattern
+	f, err := os.OpenFile(excludePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Add newline before pattern if file doesn't end with one
+	prefix := ""
+	if len(content) > 0 && content[len(content)-1] != '\n' {
+		prefix = "\n"
+	}
+	_, err = fmt.Fprintf(f, "%s%s\n", prefix, pattern)
+	return err
 }
