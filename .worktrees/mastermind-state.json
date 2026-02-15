@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "a1",
+    "name": "",
+    "branch": "tests/init",
+    "base_branch": "master",
+    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/tests/init",
+    "tmux_window": "@43",
+    "tmux_pane_id": "%77",
+    "status": "waiting",
+    "waiting_for": "permission",
+    "ever_active": true,
+    "exit_code": 0,
+    "started_at": "2026-02-15T16:58:42.630476+09:00",
+    "finished_at": "2026-02-15T17:11:52.763249+09:00",
+    "pre_review_commit": "fad3c0b7ce1a9a7c73687cf9d603c188cb52065c"
+  }
+]
