@@ -274,14 +274,9 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 
-			// Settled statuses only need pane-gone/dead detection above.
-			// Don't re-classify them based on pane content — the pattern
-			// matcher can produce false positives that demote these states.
-			// Note: StatusDone is NOT settled — the user may send another
-			// prompt, and we need to detect that the agent is running again.
-			if status == agent.StatusReviewed || status == agent.StatusReviewReady {
-				continue
-			}
+			// No statuses are fully "settled" — the user can always send
+			// another prompt to any agent, so we always need to re-classify
+			// pane content to detect when an idle agent starts working again.
 
 			if paneStatus.WaitingFor != "" && a.GetEverActive() && git.HasChanges(a.WorktreePath) {
 				// Agent was active and has changes — review ready, regardless
