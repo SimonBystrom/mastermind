@@ -38,6 +38,10 @@ type Agent struct {
 	finishedAt      time.Time
 	lazygitPaneID   string // tracks the lazygit split pane
 	preReviewCommit string // HEAD hash before review started
+
+	// Merge cleanup preferences (set by merge wizard, read after conflict resolution)
+	mergeDeleteBranch   bool
+	mergeRemoveWorktree bool
 }
 
 func NewAgent(name, branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
@@ -130,6 +134,30 @@ func (a *Agent) SetPreReviewCommit(commit string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.preReviewCommit = commit
+}
+
+func (a *Agent) GetMergeDeleteBranch() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.mergeDeleteBranch
+}
+
+func (a *Agent) SetMergeDeleteBranch(v bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.mergeDeleteBranch = v
+}
+
+func (a *Agent) GetMergeRemoveWorktree() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.mergeRemoveWorktree
+}
+
+func (a *Agent) SetMergeRemoveWorktree(v bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.mergeRemoveWorktree = v
 }
 
 func (a *Agent) Duration() time.Duration {

@@ -35,10 +35,11 @@ type AgentReviewedMsg struct {
 }
 
 type MergeResultMsg struct {
-	AgentID  string
-	Success  bool
-	Conflict bool
-	Error    string
+	AgentID       string
+	Success       bool
+	Conflict      bool
+	Error         string
+	ConflictFiles []string
 }
 
 type CleanupResult struct {
@@ -408,11 +409,15 @@ func (o *Orchestrator) handleLazygitClosed(a *agent.Agent, status agent.Status) 
 	}
 }
 
-func (o *Orchestrator) MergeAgent(id string) MergeResultMsg {
+func (o *Orchestrator) MergeAgent(id string, deleteBranch, removeWorktree bool) MergeResultMsg {
 	a, ok := o.store.Get(id)
 	if !ok {
 		return MergeResultMsg{AgentID: id, Error: "agent not found"}
 	}
+
+	// Store cleanup preferences on the agent so conflict resolution path can read them
+	a.SetMergeDeleteBranch(deleteBranch)
+	a.SetMergeRemoveWorktree(removeWorktree)
 
 	if git.HasChanges(a.WorktreePath) {
 		return MergeResultMsg{AgentID: id, Error: "uncommitted changes in worktree — commit or discard them first"}
@@ -468,7 +473,8 @@ func (o *Orchestrator) MergeAgent(id string) MergeResultMsg {
 
 	if conflicted {
 		a.SetStatus(agent.StatusConflicts)
-		return MergeResultMsg{AgentID: id, Conflict: true}
+		conflictFiles, _ := git.ConflictFiles(a.WorktreePath)
+		return MergeResultMsg{AgentID: id, Conflict: true, ConflictFiles: conflictFiles}
 	}
 
 	slog.Info("merge completed", "id", a.ID, "branch", a.Branch, "base", a.BaseBranch)
@@ -479,20 +485,25 @@ func (o *Orchestrator) MergeAgent(id string) MergeResultMsg {
 }
 
 func (o *Orchestrator) cleanupAfterMerge(a *agent.Agent) error {
+	removeWorktree := a.GetMergeRemoveWorktree()
+	deleteBranch := a.GetMergeDeleteBranch()
+
 	if a.TmuxPaneID != "" {
 		o.monitor.Remove(a.TmuxPaneID)
 	}
-	if a.TmuxWindow != "" {
-		tmux.KillWindow(a.TmuxWindow)
+	if removeWorktree {
+		if a.TmuxWindow != "" {
+			tmux.KillWindow(a.TmuxWindow)
+		}
+		if a.WorktreePath != "" {
+			git.RemoveWorktree(o.repoPath, a.WorktreePath)
+		}
 	}
-	if a.WorktreePath != "" {
-		git.RemoveWorktree(o.repoPath, a.WorktreePath)
-	}
-	if a.Branch != "" {
+	if deleteBranch && a.Branch != "" {
 		git.DeleteBranch(o.repoPath, a.Branch)
 	}
 	o.store.Remove(a.ID)
-	slog.Info("agent cleaned up after merge", "id", a.ID)
+	slog.Info("agent cleaned up after merge", "id", a.ID, "removeWorktree", removeWorktree, "deleteBranch", deleteBranch)
 	o.saveState()
 	return nil
 }

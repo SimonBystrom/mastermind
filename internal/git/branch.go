@@ -129,6 +129,20 @@ func WorktreeForBranch(repoPath, branch string) string {
 	return ""
 }
 
+func ConflictFiles(wtPath string) ([]string, error) {
+	out, err := exec.Command("git", "-C", wtPath, "diff", "--name-only", "--diff-filter=U").Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list conflict files: %w", err)
+	}
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, nil
+}
+
 func IsBranchCheckedOut(repoPath, branch string) (bool, error) {
 	worktrees, err := ListWorktrees(repoPath)
 	if err != nil {
