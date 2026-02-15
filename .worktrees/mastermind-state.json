@@ -1,18 +1,17 @@
 [
   {
-    "id": "a3",
+    "id": "a1",
     "name": "",
-    "branch": "overview/merge",
+    "branch": "dismiss/logic",
     "base_branch": "master",
-    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/overview/merge",
-    "tmux_window": "@37",
-    "tmux_pane_id": "%63",
-    "status": "reviewed",
-    "waiting_for": "",
+    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/dismiss/logic",
+    "tmux_window": "@41",
+    "tmux_pane_id": "%73",
+    "status": "waiting",
+    "waiting_for": "permission",
     "ever_active": true,
     "exit_code": 0,
-    "started_at": "2026-02-15T13:33:10.066123+09:00",
-    "finished_at": "2026-02-15T13:55:10.824412+09:00",
-    "pre_review_commit": "0be8effda7e48fc776a4a9d524848b6995e9b9a1"
+    "started_at": "2026-02-15T16:24:39.604441+09:00",
+    "finished_at": "0001-01-01T00:00:00Z"
   }
 ]

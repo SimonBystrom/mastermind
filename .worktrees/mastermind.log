@@ -328,3 +328,51 @@ time=2026-02-15T13:48:30.794+09:00 level=INFO msg="agent idle with changes" id=a
 time=2026-02-15T13:49:15.045+09:00 level=INFO msg="merge completed" id=a2 branch=overview/styling base=master
 time=2026-02-15T13:49:15.073+09:00 level=INFO msg="agent cleaned up after merge" id=a2
 time=2026-02-15T13:55:10.824+09:00 level=INFO msg="agent idle with changes" id=a3
+time=2026-02-15T13:56:47.818+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-15T13:56:47.824+09:00 level=INFO msg="recovered agent" id=a3 branch=overview/merge status=reviewed
+time=2026-02-15T13:56:47.824+09:00 level=INFO msg="agent recovery complete" recovered=1 total=1
+time=2026-02-15T13:57:06.234+09:00 level=INFO msg="merge completed" id=a3 branch=overview/merge base=master
+time=2026-02-15T13:57:06.264+09:00 level=INFO msg="agent cleaned up after merge" id=a3 removeWorktree=true deleteBranch=true
+time=2026-02-15T13:57:31.658+09:00 level=INFO msg="agent spawned" id=a1 branch=merge/flow name=""
+time=2026-02-15T13:58:01.890+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-15T13:58:09.876+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T13:58:21.908+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-15T13:58:43.888+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T13:59:11.892+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-15T13:59:13.886+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T14:00:33.292+09:00 level=INFO msg="agent spawned" id=a2 branch=overview/visual name=""
+time=2026-02-15T14:00:47.945+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=unknown
+time=2026-02-15T14:00:49.899+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-15T14:01:11.895+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
+time=2026-02-15T14:01:17.904+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-15T14:01:33.915+09:00 level=INFO msg="agent idle with changes" id=a2
+time=2026-02-15T14:02:21.316+09:00 level=INFO msg="merge completed" id=a2 branch=overview/visual base=master
+time=2026-02-15T14:02:21.346+09:00 level=INFO msg="agent cleaned up after merge" id=a2 removeWorktree=true deleteBranch=true
+time=2026-02-15T14:04:01.908+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-15T14:06:11.879+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T14:08:41.905+09:00 level=INFO msg="agent idle with changes" id=a1
+time=2026-02-15T14:08:45.241+09:00 level=INFO msg="agent spawned" id=a3 branch=status/permissions name=""
+time=2026-02-15T14:09:02.006+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=unknown
+time=2026-02-15T14:09:19.889+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-15T14:10:05.245+09:00 level=INFO msg="merge completed" id=a1 branch=merge/flow base=master
+time=2026-02-15T14:10:05.286+09:00 level=INFO msg="agent cleaned up after merge" id=a1 removeWorktree=true deleteBranch=true
+time=2026-02-15T14:10:15.902+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-15T14:10:53.929+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-15T14:10:57.906+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-15T14:11:03.883+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-15T14:12:39.903+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-15T14:18:19.879+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-15T14:18:37.912+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-15T14:18:39.887+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-15T14:18:59.907+09:00 level=DEBUG msg="agent status change" id=a3 status=waiting waitingFor=permission
+time=2026-02-15T14:28:11.884+09:00 level=DEBUG msg="agent status change" id=a3 status=running
+time=2026-02-15T14:31:27.915+09:00 level=INFO msg="agent idle with changes" id=a3
+time=2026-02-15T14:31:54.619+09:00 level=INFO msg="merge completed" id=a3 branch=status/permissions base=master
+time=2026-02-15T14:31:54.646+09:00 level=INFO msg="agent cleaned up after merge" id=a3 removeWorktree=true deleteBranch=true
+time=2026-02-15T14:32:00.235+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-15T16:24:39.604+09:00 level=INFO msg="agent spawned" id=a1 branch=dismiss/logic name=""
+time=2026-02-15T16:25:01.275+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-15T16:25:37.265+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T16:27:11.280+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-15T16:29:11.257+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T16:31:21.293+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
