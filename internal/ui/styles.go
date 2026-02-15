@@ -78,4 +78,8 @@ var (
 
 	separatorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("62"))
+
+	logoStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("170")).
+			Bold(true)
 )

@@ -13,6 +13,13 @@ import (
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
+const logo = ` ███╗   ███╗ █████╗ ███████╗████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗██████╗
+ ████╗ ████║██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗
+ ██╔████╔██║███████║███████╗   ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║██║  ██║
+ ██║╚██╔╝██║██╔══██║╚════██║   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██║  ██║
+ ██║ ╚═╝ ██║██║  ██║███████║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██████╔╝
+ ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝`
+
 type sortMode int
 
 const (
@@ -384,8 +391,12 @@ func (m dashboardModel) sortLabel() string {
 func (m dashboardModel) ViewContent() string {
 	var b strings.Builder
 
+	// Logo
+	b.WriteString(logoStyle.Render(logo))
+	b.WriteString("\n\n")
+
 	// Title
-	title := titleStyle.Render(fmt.Sprintf("Mastermind — repo: %s — session: %s", m.repoPath, m.session))
+	title := titleStyle.Render(fmt.Sprintf("repo: %s — session: %s", m.repoPath, m.session))
 	b.WriteString(title)
 	b.WriteString("\n\n")
 
