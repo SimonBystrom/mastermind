@@ -151,6 +151,26 @@ func ConflictFiles(wtPath string) ([]string, error) {
 	return files, nil
 }
 
+// CopyUncommittedChanges generates a diff of all uncommitted changes (staged
+// and unstaged) in srcWT and applies it to dstWT. Untracked files are not
+// included. Returns nil when there are no uncommitted changes to copy.
+func CopyUncommittedChanges(srcWT, dstWT string) error {
+	diff, err := exec.Command("git", "-C", srcWT, "diff", "HEAD").Output()
+	if err != nil {
+		return fmt.Errorf("diff uncommitted changes: %w", err)
+	}
+	if len(diff) == 0 {
+		return nil
+	}
+	cmd := exec.Command("git", "-C", dstWT, "apply", "--allow-empty")
+	cmd.Stdin = strings.NewReader(string(diff))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("apply uncommitted changes: %s (%w)", strings.TrimSpace(string(out)), err)
+	}
+	return nil
+}
+
 func IsBranchCheckedOut(repoPath, branch string) (bool, error) {
 	worktrees, err := ListWorktrees(repoPath)
 	if err != nil {

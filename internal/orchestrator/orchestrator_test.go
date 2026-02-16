@@ -166,6 +166,11 @@ func (m *mockGit) ListBranches(repoPath string) ([]git.Branch, error) {
 	return m.listBranchesResult, nil
 }
 
+func (m *mockGit) CopyUncommittedChanges(srcWT, dstWT string) error {
+	m.record("CopyUncommittedChanges")
+	return nil
+}
+
 type mockTmux struct {
 	mu    sync.Mutex
 	calls []string

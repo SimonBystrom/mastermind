@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -659,6 +660,14 @@ func (o *Orchestrator) PreviewAgent(id string) error {
 		return fmt.Errorf("merge conflicts between %s and %s — cannot preview", a.BaseBranch, a.Branch)
 	}
 
+	// Copy any uncommitted changes from the agent's worktree so the preview
+	// reflects work-in-progress, not just committed code.
+	if o.git.HasChanges(a.WorktreePath) {
+		if err := o.git.CopyUncommittedChanges(a.WorktreePath, o.repoPath); err != nil {
+			slog.Warn("failed to copy uncommitted changes to preview", "agent", id, "error", err)
+		}
+	}
+
 	o.previewAgentID = id
 	o.previewPrevBranch = prevBranch
 	o.previewPrevStatus = status
@@ -679,6 +688,12 @@ func (o *Orchestrator) StopPreview() error {
 
 	agentID := o.previewAgentID
 	previewBranch := "preview/" + agentID
+
+	// Discard any uncommitted changes that were applied during preview,
+	// otherwise checkout back to the previous branch may fail.
+	if o.git.HasChanges(o.repoPath) {
+		exec.Command("git", "-C", o.repoPath, "checkout", ".").Run()
+	}
 
 	if err := o.git.CheckoutBranch(o.repoPath, o.previewPrevBranch); err != nil {
 		return fmt.Errorf("checkout previous branch: %w", err)
@@ -722,6 +737,11 @@ func (o *Orchestrator) CleanupPreview() {
 	}
 
 	previewBranch := "preview/" + o.previewAgentID
+
+	// Discard uncommitted preview changes before switching back.
+	if o.git.HasChanges(o.repoPath) {
+		exec.Command("git", "-C", o.repoPath, "checkout", ".").Run()
+	}
 
 	if err := o.git.CheckoutBranch(o.repoPath, o.previewPrevBranch); err != nil {
 		slog.Error("cleanup: failed to checkout previous branch", "branch", o.previewPrevBranch, "error", err)

@@ -20,6 +20,7 @@ type GitOps interface {
 	ConflictFiles(wtPath string) ([]string, error)
 	WorktreeForBranch(repoPath, branch string) string
 	ListBranches(repoPath string) ([]Branch, error)
+	CopyUncommittedChanges(srcWT, dstWT string) error
 }
 
 // RealGit delegates to the package-level functions.
@@ -95,4 +96,8 @@ func (RealGit) WorktreeForBranch(repoPath, branch string) string {
 
 func (RealGit) ListBranches(repoPath string) ([]Branch, error) {
 	return ListBranches(repoPath)
+}
+
+func (RealGit) CopyUncommittedChanges(srcWT, dstWT string) error {
+	return CopyUncommittedChanges(srcWT, dstWT)
 }
