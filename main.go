@@ -107,6 +107,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Ensure preview branch is cleaned up on exit
+	orch.CleanupPreview()
+
 }
 
 func validateDependencies() error {

@@ -82,4 +82,13 @@ var (
 	logoStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("170")).
 			Bold(true)
+
+	previewingStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("213")).
+			Bold(true)
+
+	previewBannerStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("213")).
+				Bold(true).
+				Italic(true)
 )

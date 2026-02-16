@@ -14,6 +14,7 @@ const (
 	StatusDone        Status = "done"
 	StatusReviewing   Status = "reviewing"
 	StatusReviewed    Status = "reviewed"
+	StatusPreviewing  Status = "previewing"
 	StatusConflicts   Status = "conflicts"
 	StatusDismissed   Status = "dismissed"
 )

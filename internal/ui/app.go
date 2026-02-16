@@ -92,6 +92,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dashboard, _ = m.dashboard.Update(msg)
 		return m, nil
 
+	case orchestrator.PreviewStartedMsg:
+		m.dashboard, _ = m.dashboard.Update(msg)
+		return m, nil
+
+	case orchestrator.PreviewStoppedMsg:
+		m.dashboard, _ = m.dashboard.Update(msg)
+		return m, nil
+
+	case orchestrator.PreviewErrorMsg:
+		m.dashboard, _ = m.dashboard.Update(msg)
+		return m, nil
+
 	case orchestrator.MergeResultMsg:
 		m.dashboard, _ = m.dashboard.Update(msg)
 		if m.activeView == viewMerge {

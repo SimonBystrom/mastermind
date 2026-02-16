@@ -31,6 +31,11 @@ type mockGit struct {
 	conflictFilesResult  []string
 	worktreeForBranch    string
 	listBranchesResult   []git.Branch
+	checkoutBranchErr    error
+	currentBranchResult  string
+	currentBranchErr     error
+	branchExistsResult   bool
+	mergeAbortErr        error
 }
 
 func (m *mockGit) record(call string) {
@@ -127,6 +132,33 @@ func (m *mockGit) ConflictFiles(wtPath string) ([]string, error) {
 func (m *mockGit) WorktreeForBranch(repoPath, branch string) string {
 	m.record("WorktreeForBranch:" + branch)
 	return m.worktreeForBranch
+}
+
+func (m *mockGit) MergeAbort(wtPath string) error {
+	m.record("MergeAbort")
+	return m.mergeAbortErr
+}
+
+func (m *mockGit) CheckoutBranch(wtPath, branch string) error {
+	m.record("CheckoutBranch:" + branch)
+	return m.checkoutBranchErr
+}
+
+func (m *mockGit) CurrentBranch(repoPath string) (string, error) {
+	m.record("CurrentBranch")
+	if m.currentBranchErr != nil {
+		return "", m.currentBranchErr
+	}
+	result := m.currentBranchResult
+	if result == "" {
+		result = "main"
+	}
+	return result, nil
+}
+
+func (m *mockGit) BranchExists(repoPath, branchName string) bool {
+	m.record("BranchExists:" + branchName)
+	return m.branchExistsResult
 }
 
 func (m *mockGit) ListBranches(repoPath string) ([]git.Branch, error) {

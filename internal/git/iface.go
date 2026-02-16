@@ -12,7 +12,11 @@ type GitOps interface {
 	HeadCommit(repoOrWtPath, ref string) (string, error)
 	UpdateBranchRef(repoPath, branch, targetCommit string) error
 	MergeInWorktree(wtPath, mergeBranch string) (bool, error)
+	MergeAbort(wtPath string) error
 	MergeFFOnly(wtPath, branch string) error
+	CheckoutBranch(wtPath, branch string) error
+	CurrentBranch(repoPath string) (string, error)
+	BranchExists(repoPath, branchName string) bool
 	ConflictFiles(wtPath string) ([]string, error)
 	WorktreeForBranch(repoPath, branch string) string
 	ListBranches(repoPath string) ([]Branch, error)
@@ -61,8 +65,24 @@ func (RealGit) MergeInWorktree(wtPath, mergeBranch string) (bool, error) {
 	return MergeInWorktree(wtPath, mergeBranch)
 }
 
+func (RealGit) MergeAbort(wtPath string) error {
+	return MergeAbort(wtPath)
+}
+
 func (RealGit) MergeFFOnly(wtPath, branch string) error {
 	return MergeFFOnly(wtPath, branch)
+}
+
+func (RealGit) CheckoutBranch(wtPath, branch string) error {
+	return CheckoutBranch(wtPath, branch)
+}
+
+func (RealGit) CurrentBranch(repoPath string) (string, error) {
+	return CurrentBranch(repoPath)
+}
+
+func (RealGit) BranchExists(repoPath, branchName string) bool {
+	return BranchExists(repoPath, branchName)
 }
 
 func (RealGit) ConflictFiles(wtPath string) ([]string, error) {
