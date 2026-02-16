@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
@@ -14,7 +15,7 @@ func newTestApp(t *testing.T) AppModel {
 	t.Helper()
 	store := agent.NewStore()
 	orch := orchestrator.New(context.Background(), store, "/repo", "test", t.TempDir())
-	return NewApp(orch, store, "/repo", "test")
+	return NewApp(config.Default(), orch, store, "/repo", "test")
 }
 
 func TestAppModel_KeyQ_Quits(t *testing.T) {

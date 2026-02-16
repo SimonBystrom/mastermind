@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/git"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
@@ -16,7 +17,7 @@ func newTestSpawn(t *testing.T) spawnModel {
 	t.Helper()
 	store := agent.NewStore()
 	orch := orchestrator.New(context.Background(), store, "/repo", "test", t.TempDir())
-	return newSpawn(orch, "/repo")
+	return newSpawn(NewStyles(config.Default().Colors), orch, "/repo")
 }
 
 func TestSpawn_InitialStep(t *testing.T) {

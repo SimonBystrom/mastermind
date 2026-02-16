@@ -10,9 +10,10 @@ import (
 )
 
 type dismissModel struct {
-	orch  *orchestrator.Orchestrator
-	err   string
-	width int
+	orch   *orchestrator.Orchestrator
+	err    string
+	width  int
+	styles Styles
 
 	agentID      string
 	agentName    string
@@ -30,13 +31,14 @@ type startDismissMsg struct {
 	deleteBranch bool
 }
 
-func newDismiss(orch *orchestrator.Orchestrator, msg startDismissMsg) dismissModel {
+func newDismiss(s Styles, orch *orchestrator.Orchestrator, msg startDismissMsg) dismissModel {
 	return dismissModel{
 		orch:         orch,
 		agentID:      msg.agentID,
 		agentName:    msg.agentName,
 		branch:       msg.branch,
 		deleteBranch: msg.deleteBranch,
+		styles:       s,
 	}
 }
 
@@ -74,9 +76,9 @@ func (m dismissModel) ViewContent() string {
 	var b strings.Builder
 
 	if m.deleteBranch {
-		b.WriteString(wizardTitleStyle.Render("Dismiss & Delete Agent"))
+		b.WriteString(m.styles.WizardTitle.Render("Dismiss & Delete Agent"))
 	} else {
-		b.WriteString(wizardTitleStyle.Render("Dismiss Agent"))
+		b.WriteString(m.styles.WizardTitle.Render("Dismiss Agent"))
 	}
 	b.WriteString("\n\n")
 
@@ -84,7 +86,7 @@ func (m dismissModel) ViewContent() string {
 	b.WriteString(fmt.Sprintf("  Branch:      %s\n", m.branch))
 	b.WriteString("\n")
 
-	b.WriteString(wizardActiveStyle.Render("  This will:"))
+	b.WriteString(m.styles.WizardActive.Render("  This will:"))
 	b.WriteString("\n")
 	b.WriteString("    - Stop the Claude process\n")
 	b.WriteString("    - Kill the tmux window\n")
@@ -95,23 +97,23 @@ func (m dismissModel) ViewContent() string {
 
 	b.WriteString("\n")
 	if m.deleteBranch {
-		b.WriteString(errorStyle.Render("  All changes (committed and uncommitted) will be lost."))
+		b.WriteString(m.styles.Error.Render("  All changes (committed and uncommitted) will be lost."))
 	} else {
-		b.WriteString(errorStyle.Render("  Any uncommitted changes will be lost."))
+		b.WriteString(m.styles.Error.Render("  Any uncommitted changes will be lost."))
 	}
 	b.WriteString("\n")
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("  y/enter: confirm | esc/n: cancel"))
+	b.WriteString(m.styles.Help.Render("  y/enter: confirm | esc/n: cancel"))
 
 	if m.err != "" {
 		b.WriteString("\n\n")
-		b.WriteString(errorStyle.Render("  Error: " + m.err))
+		b.WriteString(m.styles.Error.Render("  Error: " + m.err))
 	}
 
 	return b.String()
 }
 
 func (m dismissModel) View() string {
-	return borderStyle.Render(m.ViewContent())
+	return m.styles.Border.Render(m.ViewContent())
 }

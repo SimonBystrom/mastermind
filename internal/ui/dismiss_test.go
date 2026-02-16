@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
@@ -15,7 +16,7 @@ func newTestDismiss(t *testing.T, deleteBranch bool) dismissModel {
 	t.Helper()
 	store := agent.NewStore()
 	orch := orchestrator.New(context.Background(), store, "/repo", "test", t.TempDir())
-	return newDismiss(orch, startDismissMsg{
+	return newDismiss(NewStyles(config.Default().Colors), orch, startDismissMsg{
 		agentID:      "a1",
 		agentName:    "test-agent",
 		branch:       "feat/x",

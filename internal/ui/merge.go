@@ -22,6 +22,7 @@ type mergeModel struct {
 	step     mergeStep
 	err      string
 	width    int
+	styles   Styles
 
 	agentID   string
 	agentName string
@@ -48,7 +49,7 @@ type startMergeMsg struct {
 	baseBranch string
 }
 
-func newMerge(orch *orchestrator.Orchestrator, repoPath string, msg startMergeMsg) mergeModel {
+func newMerge(s Styles, orch *orchestrator.Orchestrator, repoPath string, msg startMergeMsg) mergeModel {
 	return mergeModel{
 		orch:           orch,
 		repoPath:       repoPath,
@@ -59,6 +60,7 @@ func newMerge(orch *orchestrator.Orchestrator, repoPath string, msg startMergeMs
 		baseBranch:     msg.baseBranch,
 		deleteBranch:   true,
 		removeWorktree: true,
+		styles:         s,
 	}
 }
 
@@ -143,14 +145,14 @@ func (m mergeModel) ViewContent() string {
 
 	switch m.step {
 	case mergeStepConfirm:
-		b.WriteString(wizardTitleStyle.Render("Merge Agent"))
+		b.WriteString(m.styles.WizardTitle.Render("Merge Agent"))
 		b.WriteString("\n\n")
 
 		b.WriteString(fmt.Sprintf("  Agent:       %s\n", m.agentName))
 		b.WriteString(fmt.Sprintf("  Branch:      %s\n", m.branch))
 		b.WriteString(fmt.Sprintf("  Into:        %s\n", m.baseBranch))
 		b.WriteString("\n")
-		b.WriteString(wizardActiveStyle.Render("  After merge:"))
+		b.WriteString(m.styles.WizardActive.Render("  After merge:"))
 		b.WriteString("\n")
 
 		options := []struct {
@@ -171,7 +173,7 @@ func (m mergeModel) ViewContent() string {
 			}
 			line := fmt.Sprintf("  %s[%s] %s", cursor, check, opt.label)
 			if i == m.optionCursor {
-				b.WriteString(wizardActiveStyle.Render(line))
+				b.WriteString(m.styles.WizardActive.Render(line))
 			} else {
 				b.WriteString(line)
 			}
@@ -179,19 +181,19 @@ func (m mergeModel) ViewContent() string {
 		}
 
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("  y/enter: merge | space: toggle | esc: cancel"))
+		b.WriteString(m.styles.Help.Render("  y/enter: merge | space: toggle | esc: cancel"))
 
 	case mergeStepConflicts:
-		b.WriteString(wizardTitleStyle.Render("Merge Agent — Conflicts"))
+		b.WriteString(m.styles.WizardTitle.Render("Merge Agent — Conflicts"))
 		b.WriteString("\n\n")
 
 		b.WriteString(fmt.Sprintf("  Merging %s into %s\n", m.branch, m.baseBranch))
 		b.WriteString("\n")
-		b.WriteString(wizardActiveStyle.Render("  Conflicted files:"))
+		b.WriteString(m.styles.WizardActive.Render("  Conflicted files:"))
 		b.WriteString("\n")
 
 		if len(m.conflictFiles) == 0 {
-			b.WriteString(wizardDimStyle.Render("    (no files detected)"))
+			b.WriteString(m.styles.WizardDim.Render("    (no files detected)"))
 			b.WriteString("\n")
 		} else {
 			for _, f := range m.conflictFiles {
@@ -200,17 +202,17 @@ func (m mergeModel) ViewContent() string {
 		}
 
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("  enter: open lazygit | esc: cancel"))
+		b.WriteString(m.styles.Help.Render("  enter: open lazygit | esc: cancel"))
 	}
 
 	if m.err != "" {
 		b.WriteString("\n\n")
-		b.WriteString(errorStyle.Render("  Error: " + m.err))
+		b.WriteString(m.styles.Error.Render("  Error: " + m.err))
 	}
 
 	return b.String()
 }
 
 func (m mergeModel) View() string {
-	return borderStyle.Render(m.ViewContent())
+	return m.styles.Border.Render(m.ViewContent())
 }

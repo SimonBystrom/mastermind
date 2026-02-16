@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
@@ -15,7 +16,7 @@ func newTestMerge(t *testing.T) mergeModel {
 	t.Helper()
 	store := agent.NewStore()
 	orch := orchestrator.New(context.Background(), store, "/repo", "test", t.TempDir())
-	return newMerge(orch, "/repo", startMergeMsg{
+	return newMerge(NewStyles(config.Default().Colors), orch, "/repo", startMergeMsg{
 		agentID:    "a1",
 		agentName:  "test-agent",
 		branch:     "feat/x",

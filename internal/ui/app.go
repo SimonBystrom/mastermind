@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
@@ -26,6 +27,9 @@ type AppModel struct {
 	session   string
 	activeView view
 
+	styles Styles
+	layout config.Layout
+
 	dashboard dashboardModel
 	spawn     spawnModel
 	merge     mergeModel
@@ -35,14 +39,17 @@ type AppModel struct {
 	height int
 }
 
-func NewApp(orch *orchestrator.Orchestrator, store *agent.Store, repoPath, session string) AppModel {
+func NewApp(cfg config.Config, orch *orchestrator.Orchestrator, store *agent.Store, repoPath, session string) AppModel {
+	s := NewStyles(cfg.Colors)
 	return AppModel{
 		orch:       orch,
 		store:      store,
 		repoPath:   repoPath,
 		session:    session,
 		activeView: viewDashboard,
-		dashboard:  newDashboard(orch, store, repoPath, session),
+		styles:     s,
+		layout:     cfg.Layout,
+		dashboard:  newDashboard(s, cfg.Layout, orch, store, repoPath, session),
 	}
 }
 
@@ -127,7 +134,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case startMergeMsg:
 		m.activeView = viewMerge
-		m.merge = newMerge(m.orch, m.repoPath, msg)
+		m.merge = newMerge(m.styles, m.orch, m.repoPath, msg)
 		return m, nil
 
 	case mergeDoneMsg:
@@ -140,7 +147,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case startDismissMsg:
 		m.activeView = viewDismiss
-		m.dismiss = newDismiss(m.orch, msg)
+		m.dismiss = newDismiss(m.styles, m.orch, msg)
 		return m, nil
 
 	case dismissDoneMsg:
@@ -186,7 +193,7 @@ func (m AppModel) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "n":
 			m.activeView = viewSpawn
-			m.spawn = newSpawn(m.orch, m.repoPath)
+			m.spawn = newSpawn(m.styles, m.orch, m.repoPath)
 			return m, m.spawn.Init()
 		}
 	}
@@ -233,8 +240,7 @@ func (m AppModel) viewSideBySide(rightPanel string) string {
 		maxWidth = 80
 	}
 
-	// 55% for dashboard, 45% for right panel, minus 1 for separator
-	dashWidth := maxWidth * 55 / 100
+	dashWidth := maxWidth * m.layout.DashboardWidth / 100
 	panelWidth := maxWidth - dashWidth - 1
 
 	dashContent := lipgloss.NewStyle().Width(dashWidth).Render(m.dashboard.ViewContent())
@@ -251,9 +257,9 @@ func (m AppModel) viewSideBySide(rightPanel string) string {
 	for i := range sepLines {
 		sepLines[i] = "│"
 	}
-	sep := separatorStyle.Render(strings.Join(sepLines, "\n"))
+	sep := m.styles.Separator.Render(strings.Join(sepLines, "\n"))
 
 	joined := lipgloss.JoinHorizontal(lipgloss.Top, dashContent, sep, panelContent)
 
-	return borderStyle.Width(maxWidth).Render(joined)
+	return m.styles.Border.Width(maxWidth).Render(joined)
 }

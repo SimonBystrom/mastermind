@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
@@ -47,15 +48,18 @@ type dashboardModel struct {
 	height        int
 	err           string
 	sortBy        sortMode
-
+	styles        Styles
+	layout        config.Layout
 }
 
-func newDashboard(orch *orchestrator.Orchestrator, store *agent.Store, repoPath, session string) dashboardModel {
+func newDashboard(s Styles, layout config.Layout, orch *orchestrator.Orchestrator, store *agent.Store, repoPath, session string) dashboardModel {
 	return dashboardModel{
 		store:    store,
 		orch:     orch,
 		repoPath: repoPath,
 		session:  session,
+		styles:   s,
+		layout:   layout,
 	}
 }
 
@@ -81,10 +85,10 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		var style lipgloss.Style
 		if msg.HasChanges {
 			text = fmt.Sprintf("Agent %s finished with changes — ready for review (exit %d)", name, msg.ExitCode)
-			style = reviewReadyStyle
+			style = m.styles.ReviewReady
 		} else {
 			text = fmt.Sprintf("Agent %s finished with no changes (exit %d)", name, msg.ExitCode)
-			style = doneStyle
+			style = m.styles.Done
 		}
 		m.notifications = append(m.notifications, notification{
 			text:  text,
@@ -106,7 +110,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		m.notifications = append(m.notifications, notification{
 			text:  fmt.Sprintf("Agent %s window closed", name),
 			time:  time.Now(),
-			style: doneStyle,
+			style: m.styles.Done,
 		})
 		if len(m.notifications) > 10 {
 			m.notifications = m.notifications[len(m.notifications)-10:]
@@ -127,10 +131,10 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		var style lipgloss.Style
 		if msg.NewCommits {
 			text = fmt.Sprintf("Agent %s review complete — new commits found", name)
-			style = reviewedStyle
+			style = m.styles.Reviewed
 		} else {
 			text = fmt.Sprintf("Agent %s review closed — no new commits", name)
-			style = doneStyle
+			style = m.styles.Done
 		}
 		m.notifications = append(m.notifications, notification{
 			text:  text,
@@ -152,13 +156,13 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		var style lipgloss.Style
 		if msg.Success {
 			text = fmt.Sprintf("Agent %s merged successfully", name)
-			style = reviewedStyle
+			style = m.styles.Reviewed
 		} else if msg.Conflict {
 			text = fmt.Sprintf("Agent %s merge has conflicts — resolve in lazygit", name)
-			style = conflictsStyle
+			style = m.styles.Conflicts
 		} else if msg.Error != "" {
 			text = fmt.Sprintf("Agent %s merge failed: %s", name, msg.Error)
-			style = errorStyle
+			style = m.styles.Error
 		}
 		m.notifications = append(m.notifications, notification{
 			text:  text,
@@ -183,7 +187,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		m.notifications = append(m.notifications, notification{
 			text:  fmt.Sprintf("Preview started for agent %s", name),
 			time:  time.Now(),
-			style: previewingStyle,
+			style: m.styles.Previewing,
 		})
 		if len(m.notifications) > 10 {
 			m.notifications = m.notifications[len(m.notifications)-10:]
@@ -199,7 +203,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		m.notifications = append(m.notifications, notification{
 			text:  fmt.Sprintf("Preview stopped for agent %s", name),
 			time:  time.Now(),
-			style: doneStyle,
+			style: m.styles.Done,
 		})
 		if len(m.notifications) > 10 {
 			m.notifications = m.notifications[len(m.notifications)-10:]
@@ -220,13 +224,13 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		var style lipgloss.Style
 		if msg.WaitingFor == "permission" {
 			text = fmt.Sprintf("Agent %s needs permission approval", name)
-			style = permissionStyle
+			style = m.styles.Permission
 		} else if msg.WaitingFor == "unknown" {
 			text = fmt.Sprintf("Agent %s may need attention", name)
-			style = attentionStyle
+			style = m.styles.Attention
 		} else {
 			text = fmt.Sprintf("Agent %s is waiting for input", name)
-			style = waitingStyle
+			style = m.styles.Waiting
 		}
 		m.notifications = append(m.notifications, notification{
 			text:  text,
@@ -324,7 +328,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 					m.notifications = append(m.notifications, notification{
 						text:  fmt.Sprintf("Cleaned up %s (%s)", r.AgentName, r.Reason),
 						time:  time.Now(),
-						style: doneStyle,
+						style: m.styles.Done,
 					})
 				}
 				if len(m.notifications) > 10 {
@@ -338,7 +342,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 				m.notifications = append(m.notifications, notification{
 					text:  "No dead agents found",
 					time:  time.Now(),
-					style: doneStyle,
+					style: m.styles.Done,
 				})
 				if len(m.notifications) > 10 {
 					m.notifications = m.notifications[len(m.notifications)-10:]
@@ -438,11 +442,11 @@ func (m dashboardModel) ViewContent() string {
 	var b strings.Builder
 
 	// Logo
-	b.WriteString(logoStyle.Render(logo))
+	b.WriteString(m.styles.Logo.Render(logo))
 	b.WriteString("\n\n")
 
 	// Title
-	title := titleStyle.Render(fmt.Sprintf("repo: %s — session: %s", m.repoPath, m.session))
+	title := m.styles.Title.Render(fmt.Sprintf("repo: %s — session: %s", m.repoPath, m.session))
 	b.WriteString(title)
 	b.WriteString("\n")
 
@@ -458,7 +462,7 @@ func (m dashboardModel) ViewContent() string {
 			previewBranch = previewAgent.Branch
 		}
 		banner := fmt.Sprintf("  PREVIEW ACTIVE: %s (branch %s) — p to stop", previewName, previewBranch)
-		b.WriteString(previewBannerStyle.Render(banner))
+		b.WriteString(m.styles.PreviewBanner.Render(banner))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
@@ -466,12 +470,12 @@ func (m dashboardModel) ViewContent() string {
 	// Agent table
 	agents := m.sortedAgents()
 	if len(agents) == 0 {
-		b.WriteString(wizardDimStyle.Render("  No agents running. Press n to spawn one."))
+		b.WriteString(m.styles.WizardDim.Render("  No agents running. Press n to spawn one."))
 		b.WriteString("\n")
 	} else {
 		// Header
 		header := fmt.Sprintf("  %-4s %-18s %-22s %-12s %-10s", "ID", "Name", "Branch", "Status", "Duration")
-		b.WriteString(headerStyle.Render(header))
+		b.WriteString(m.styles.Header.Render(header))
 		b.WriteString("\n")
 
 		for i, a := range agents {
@@ -486,27 +490,27 @@ func (m dashboardModel) ViewContent() string {
 			var styledStatus string
 			switch status {
 			case agent.StatusRunning:
-				styledStatus = runningStyle.Render("running")
+				styledStatus = m.styles.Running.Render("running")
 			case agent.StatusWaiting:
 				if waitingFor == "permission" {
-					styledStatus = permissionStyle.Render("permission")
+					styledStatus = m.styles.Permission.Render("permission")
 				} else if waitingFor == "unknown" {
-					styledStatus = attentionStyle.Render("attention?")
+					styledStatus = m.styles.Attention.Render("attention?")
 				} else {
-					styledStatus = waitingStyle.Render("waiting")
+					styledStatus = m.styles.Waiting.Render("waiting")
 				}
 			case agent.StatusReviewReady:
-				styledStatus = reviewReadyStyle.Render("review ready")
+				styledStatus = m.styles.ReviewReady.Render("review ready")
 			case agent.StatusDone:
-				styledStatus = doneStyle.Render("done")
+				styledStatus = m.styles.Done.Render("done")
 			case agent.StatusReviewing:
-				styledStatus = reviewingStyle.Render("reviewing")
+				styledStatus = m.styles.Reviewing.Render("reviewing")
 			case agent.StatusReviewed:
-				styledStatus = reviewedStyle.Render("reviewed")
+				styledStatus = m.styles.Reviewed.Render("reviewed")
 			case agent.StatusPreviewing:
-				styledStatus = previewingStyle.Render("previewing")
+				styledStatus = m.styles.Previewing.Render("previewing")
 			case agent.StatusConflicts:
-				styledStatus = conflictsStyle.Render("conflicts")
+				styledStatus = m.styles.Conflicts.Render("conflicts")
 			default:
 				styledStatus = string(status)
 			}
@@ -516,20 +520,20 @@ func (m dashboardModel) ViewContent() string {
 			indicator := "  "
 			switch status {
 			case agent.StatusReviewReady:
-				indicator = " " + reviewReadyStyle.Render("◀")
+				indicator = " " + m.styles.ReviewReady.Render("◀")
 			case agent.StatusReviewed:
-				indicator = " " + reviewedStyle.Render("◀")
+				indicator = " " + m.styles.Reviewed.Render("◀")
 			case agent.StatusPreviewing:
-				indicator = " " + previewingStyle.Render("◀")
+				indicator = " " + m.styles.Previewing.Render("◀")
 			case agent.StatusConflicts:
-				indicator = " " + conflictsStyle.Render("◀")
+				indicator = " " + m.styles.Conflicts.Render("◀")
 			case agent.StatusWaiting:
 				if waitingFor == "permission" {
-					indicator = " " + permissionStyle.Render("◀")
+					indicator = " " + m.styles.Permission.Render("◀")
 				} else if waitingFor == "unknown" {
-					indicator = " " + attentionStyle.Render("?")
+					indicator = " " + m.styles.Attention.Render("?")
 				} else {
-					indicator = " " + waitingStyle.Render("◀")
+					indicator = " " + m.styles.Waiting.Render("◀")
 				}
 			}
 
@@ -550,7 +554,7 @@ func (m dashboardModel) ViewContent() string {
 			)
 
 			if i == m.cursor {
-				row = selectedStyle.Render(row)
+				row = m.styles.Selected.Render(row)
 			}
 
 			b.WriteString(row)
@@ -561,7 +565,7 @@ func (m dashboardModel) ViewContent() string {
 	// Notifications (newest first)
 	if len(m.notifications) > 0 {
 		b.WriteString("\n")
-		b.WriteString(headerStyle.Render("  ── Notifications ──"))
+		b.WriteString(m.styles.Header.Render("  ── Notifications ──"))
 		b.WriteString("\n")
 		for i := len(m.notifications) - 1; i >= 0; i-- {
 			n := m.notifications[i]
@@ -575,13 +579,13 @@ func (m dashboardModel) ViewContent() string {
 	// Error
 	if m.err != "" {
 		b.WriteString("\n")
-		b.WriteString(errorStyle.Render("  Error: " + m.err))
+		b.WriteString(m.styles.Error.Render("  Error: " + m.err))
 		b.WriteString("\n")
 	}
 
 	// Help
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ p: preview │ m: merge │ d: dismiss │ D: dismiss+delete │ s: sort (%s) │ q: quit", m.sortLabel())))
+	b.WriteString(m.styles.Help.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ p: preview │ m: merge │ d: dismiss │ D: dismiss+delete │ s: sort (%s) │ q: quit", m.sortLabel())))
 
 	return b.String()
 }
@@ -594,7 +598,7 @@ func (m dashboardModel) View() string {
 		maxWidth = 80
 	}
 
-	return borderStyle.Width(maxWidth).Render(content)
+	return m.styles.Border.Width(maxWidth).Render(content)
 }
 
 func formatDuration(d time.Duration) string {

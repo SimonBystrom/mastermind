@@ -68,6 +68,7 @@ type Orchestrator struct {
 	statePath   string
 	git         git.GitOps
 	tmux        tmux.TmuxOps
+	lazygitSplit int
 
 	previewAgentID    string // ID of agent being previewed (empty = no preview)
 	previewPrevBranch string // branch the main worktree was on before preview
@@ -92,17 +93,23 @@ func WithMonitor(m tmux.PaneStatusChecker) Option {
 	return func(o *Orchestrator) { o.monitor = m }
 }
 
+// WithLazygitSplit sets the lazygit pane size percentage.
+func WithLazygitSplit(pct int) Option {
+	return func(o *Orchestrator) { o.lazygitSplit = pct }
+}
+
 func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
-		ctx:         ctx,
-		store:       store,
-		repoPath:    repoPath,
-		session:     session,
-		worktreeDir: worktreeDir,
-		monitor:     tmux.NewPaneMonitor(),
-		statePath:   worktreeDir + "/mastermind-state.json",
-		git:         git.RealGit{},
-		tmux:        tmux.RealTmux{},
+		ctx:          ctx,
+		store:        store,
+		repoPath:     repoPath,
+		session:      session,
+		worktreeDir:  worktreeDir,
+		monitor:      tmux.NewPaneMonitor(),
+		statePath:    worktreeDir + "/mastermind-state.json",
+		git:          git.RealGit{},
+		tmux:         tmux.RealTmux{},
+		lazygitSplit: 80,
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -242,7 +249,7 @@ func (o *Orchestrator) OpenLazyGit(id string) error {
 	if shell == "" {
 		shell = "/bin/bash"
 	}
-	paneID, err := o.tmux.SplitWindow(a.TmuxPaneID, a.WorktreePath, true, 80, []string{shell, "-lc", "export GPG_TTY=$(tty); exec lazygit"})
+	paneID, err := o.tmux.SplitWindow(a.TmuxPaneID, a.WorktreePath, true, o.lazygitSplit, []string{shell, "-lc", "export GPG_TTY=$(tty); exec lazygit"})
 	if err != nil {
 		return fmt.Errorf("split window for lazygit: %w", err)
 	}

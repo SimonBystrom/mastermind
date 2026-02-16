@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 	"github.com/simonbystrom/mastermind/internal/ui"
@@ -62,6 +63,18 @@ func main() {
 		*session = detected
 	}
 
+	// Load user configuration
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Write default config file if it doesn't exist
+	if err := config.WriteDefault(config.Path()); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not write default config: %v\n", err)
+	}
+
 	worktreeDir := filepath.Join(absRepo, ".worktrees")
 	if err := os.MkdirAll(worktreeDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "error creating worktree directory: %v\n", err)
@@ -91,12 +104,14 @@ func main() {
 	defer cancel()
 
 	store := agent.NewStore()
-	orch := orchestrator.New(ctx, store, absRepo, *session, worktreeDir)
+	orch := orchestrator.New(ctx, store, absRepo, *session, worktreeDir,
+		orchestrator.WithLazygitSplit(cfg.Layout.LazygitSplit),
+	)
 
 	// Recover agents from previous session
 	orch.RecoverAgents()
 
-	model := ui.NewApp(orch, store, absRepo, *session)
+	model := ui.NewApp(cfg, orch, store, absRepo, *session)
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithReportFocus())
 
 	orch.SetProgram(p)

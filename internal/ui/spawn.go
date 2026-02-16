@@ -35,6 +35,7 @@ type spawnModel struct {
 	mode     spawnMode
 	err      string
 	width    int
+	styles   Styles
 
 	// Mode selection
 	modeCursor int
@@ -61,7 +62,7 @@ type spawnModel struct {
 type spawnDoneMsg struct{}
 type spawnCancelMsg struct{}
 
-func newSpawn(orch *orchestrator.Orchestrator, repoPath string) spawnModel {
+func newSpawn(s Styles, orch *orchestrator.Orchestrator, repoPath string) spawnModel {
 	bf := textinput.New()
 	bf.Placeholder = "filter branches..."
 
@@ -78,6 +79,7 @@ func newSpawn(orch *orchestrator.Orchestrator, repoPath string) spawnModel {
 		branchFilter: bf,
 		branchInput:  bi,
 		nameInput:    ni,
+		styles:       s,
 	}
 }
 
@@ -288,12 +290,12 @@ func (m spawnModel) filteredBranches() []git.Branch {
 func (m spawnModel) ViewContent() string {
 	var b strings.Builder
 
-	b.WriteString(wizardTitleStyle.Render("Spawn New Agent"))
+	b.WriteString(m.styles.WizardTitle.Render("Spawn New Agent"))
 	b.WriteString("\n\n")
 
 	switch m.step {
 	case stepChooseMode:
-		b.WriteString(wizardActiveStyle.Render("How do you want to set up the branch?"))
+		b.WriteString(m.styles.WizardActive.Render("How do you want to set up the branch?"))
 		b.WriteString("\n\n")
 
 		options := []struct {
@@ -310,28 +312,28 @@ func (m spawnModel) ViewContent() string {
 			}
 			line := fmt.Sprintf("%s%s", cursor, opt.label)
 			if i == m.modeCursor {
-				b.WriteString(wizardActiveStyle.Render(line))
+				b.WriteString(m.styles.WizardActive.Render(line))
 				b.WriteString("\n")
-				b.WriteString(wizardDimStyle.Render("    " + opt.desc))
+				b.WriteString(m.styles.WizardDim.Render("    " + opt.desc))
 			} else {
 				b.WriteString("  " + opt.label)
 				b.WriteString("\n")
-				b.WriteString(wizardDimStyle.Render("    " + opt.desc))
+				b.WriteString(m.styles.WizardDim.Render("    " + opt.desc))
 			}
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("  enter: select │ esc: cancel"))
+		b.WriteString(m.styles.Help.Render("  enter: select │ esc: cancel"))
 
 	case stepPickBranch:
 		if m.mode == modeExisting {
-			b.WriteString(wizardDimStyle.Render("Mode: Use existing branch"))
+			b.WriteString(m.styles.WizardDim.Render("Mode: Use existing branch"))
 			b.WriteString("\n")
-			b.WriteString(wizardActiveStyle.Render("Pick branch to use"))
+			b.WriteString(m.styles.WizardActive.Render("Pick branch to use"))
 		} else {
-			b.WriteString(wizardDimStyle.Render(fmt.Sprintf("New branch: %s", m.branch)))
+			b.WriteString(m.styles.WizardDim.Render(fmt.Sprintf("New branch: %s", m.branch)))
 			b.WriteString("\n")
-			b.WriteString(wizardActiveStyle.Render("Pick base branch to create from"))
+			b.WriteString(m.styles.WizardActive.Render("Pick base branch to create from"))
 		}
 		b.WriteString("\n\n")
 		b.WriteString("  " + m.branchFilter.View())
@@ -339,7 +341,7 @@ func (m spawnModel) ViewContent() string {
 
 		filtered := m.filteredBranches()
 		if len(filtered) == 0 {
-			b.WriteString(wizardDimStyle.Render("  No matching branches"))
+			b.WriteString(m.styles.WizardDim.Render("  No matching branches"))
 		} else {
 			for i, br := range filtered {
 				cursor := "  "
@@ -351,44 +353,44 @@ func (m spawnModel) ViewContent() string {
 					name += " (current)"
 				}
 				if i == m.branchCursor {
-					b.WriteString(wizardActiveStyle.Render(cursor + name))
+					b.WriteString(m.styles.WizardActive.Render(cursor + name))
 				} else {
 					b.WriteString("  " + name)
 				}
 				b.WriteString("\n")
 				if i > 15 {
-					b.WriteString(wizardDimStyle.Render(fmt.Sprintf("  ... and %d more", len(filtered)-16)))
+					b.WriteString(m.styles.WizardDim.Render(fmt.Sprintf("  ... and %d more", len(filtered)-16)))
 					break
 				}
 			}
 		}
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("  enter: select │ esc: back"))
+		b.WriteString(m.styles.Help.Render("  enter: select │ esc: back"))
 
 	case stepNewBranchName:
-		b.WriteString(wizardDimStyle.Render("Mode: Create new branch"))
+		b.WriteString(m.styles.WizardDim.Render("Mode: Create new branch"))
 		b.WriteString("\n")
-		b.WriteString(wizardActiveStyle.Render("Enter new branch name"))
+		b.WriteString(m.styles.WizardActive.Render("Enter new branch name"))
 		b.WriteString("\n\n")
 		b.WriteString("  " + m.branchInput.View())
 		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Render("  enter: continue │ esc: back"))
+		b.WriteString(m.styles.Help.Render("  enter: continue │ esc: back"))
 
 	case stepAgentName:
 		if m.createBranch {
-			b.WriteString(wizardDimStyle.Render(fmt.Sprintf("Branch: %s (new, from %s)", m.branch, m.baseBranch)))
+			b.WriteString(m.styles.WizardDim.Render(fmt.Sprintf("Branch: %s (new, from %s)", m.branch, m.baseBranch)))
 		} else {
-			b.WriteString(wizardDimStyle.Render(fmt.Sprintf("Branch: %s (existing)", m.branch)))
+			b.WriteString(m.styles.WizardDim.Render(fmt.Sprintf("Branch: %s (existing)", m.branch)))
 		}
 		b.WriteString("\n")
-		b.WriteString(wizardActiveStyle.Render("Agent name (optional)"))
+		b.WriteString(m.styles.WizardActive.Render("Agent name (optional)"))
 		b.WriteString("\n\n")
 		b.WriteString("  " + m.nameInput.View())
 		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Render("  enter: continue │ esc: back"))
+		b.WriteString(m.styles.Help.Render("  enter: continue │ esc: back"))
 
 	case stepConfirm:
-		b.WriteString(wizardActiveStyle.Render("Confirm"))
+		b.WriteString(m.styles.WizardActive.Render("Confirm"))
 		b.WriteString("\n\n")
 		b.WriteString(fmt.Sprintf("  Branch:    %s\n", m.branch))
 		if m.createBranch {
@@ -400,17 +402,17 @@ func (m spawnModel) ViewContent() string {
 			b.WriteString(fmt.Sprintf("  Name:      %s\n", m.agentName))
 		}
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("  y/enter: spawn │ n: go back │ esc: back"))
+		b.WriteString(m.styles.Help.Render("  y/enter: spawn │ n: go back │ esc: back"))
 	}
 
 	if m.err != "" {
 		b.WriteString("\n\n")
-		b.WriteString(errorStyle.Render("  Error: " + m.err))
+		b.WriteString(m.styles.Error.Render("  Error: " + m.err))
 	}
 
 	return b.String()
 }
 
 func (m spawnModel) View() string {
-	return borderStyle.Render(m.ViewContent())
+	return m.styles.Border.Render(m.ViewContent())
 }

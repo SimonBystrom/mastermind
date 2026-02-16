@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
@@ -53,8 +54,9 @@ func TestTruncate(t *testing.T) {
 func newTestDashboard(t *testing.T) (dashboardModel, *agent.Store) {
 	t.Helper()
 	store := agent.NewStore()
+	cfg := config.Default()
 	orch := orchestrator.New(context.Background(), store, "/repo", "test", t.TempDir())
-	d := newDashboard(orch, store, "/repo", "test")
+	d := newDashboard(NewStyles(cfg.Colors), cfg.Layout, orch, store, "/repo", "test")
 	d.width = 120
 	d.height = 40
 	return d, store
