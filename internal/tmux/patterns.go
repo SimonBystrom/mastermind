@@ -27,9 +27,10 @@ type MonitorPatterns struct {
 
 // PaneStatus represents the current state of a tmux pane.
 type PaneStatus struct {
-	Dead       bool
-	ExitCode   int
-	WaitingFor string // "permission", "input", "unknown", or "" (working)
+	Dead            bool
+	ExitCode        int
+	WaitingFor      string // "permission", "input", "unknown", or "" (working)
+	HasNumberedList bool   // bottom of pane contains numbered options (1. X  2. Y  3. Z)
 }
 
 // DefaultPatterns contains the default detection patterns for Claude Code.

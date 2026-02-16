@@ -321,8 +321,17 @@ func (o *Orchestrator) StartMonitor() {
 			// another prompt to any agent, so we always need to re-classify
 			// pane content to detect when an idle agent starts working again.
 
-			if paneStatus.WaitingFor == "permission" {
-				// Claude needs permission approval
+			if paneStatus.WaitingFor == "" {
+				// Claude is actively working
+				a.SetEverActive(true)
+				if status != agent.StatusRunning {
+					a.SetStatus(agent.StatusRunning)
+					a.SetWaitingFor("")
+					slog.Debug("agent status change", "id", a.ID, "status", "running")
+				}
+			} else if paneStatus.HasNumberedList {
+				// Pane has a numbered option list (e.g. AskUserQuestion) —
+				// this needs user attention regardless of git state.
 				a.SetEverActive(true)
 				if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
 					a.SetStatus(agent.StatusWaiting)
@@ -335,29 +344,10 @@ func (o *Orchestrator) StartMonitor() {
 						})
 					}
 				}
-			} else if paneStatus.WaitingFor == "unknown" {
-				a.SetEverActive(true)
-				if status != agent.StatusWaiting || a.GetWaitingFor() != "unknown" {
-					a.SetStatus(agent.StatusWaiting)
-					a.SetWaitingFor("unknown")
-					slog.Debug("agent status change", "id", a.ID, "status", "waiting", "waitingFor", "unknown")
-					if o.program != nil {
-						o.program.Send(AgentWaitingMsg{AgentID: a.ID, WaitingFor: "unknown"})
-					}
-				}
-			} else if paneStatus.WaitingFor == "input" {
-				// Claude is idle at prompt — only treat as finished if agent was ever active
-				if a.GetEverActive() {
-					o.handleAgentIdle(a)
-				}
-			} else {
-				// Claude is actively working
-				a.SetEverActive(true)
-				if status != agent.StatusRunning {
-					a.SetStatus(agent.StatusRunning)
-					a.SetWaitingFor("")
-					slog.Debug("agent status change", "id", a.ID, "status", "running")
-				}
+			} else if a.GetEverActive() {
+				// Pane is stable with no numbered list — determine status
+				// from git state (review ready if changes, done otherwise).
+				o.handleAgentIdle(a)
 			}
 		}
 		o.saveState()

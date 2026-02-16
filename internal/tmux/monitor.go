@@ -4,10 +4,13 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 )
+
+var numberedListRegex = regexp.MustCompile(`^\d+\.\s`)
 
 // PaneMonitor tracks pane content over time to detect when Claude is waiting.
 // If the visible pane content is changing between polls, Claude is working.
@@ -54,16 +57,24 @@ func (m *PaneMonitor) GetPaneStatus(paneID string) (PaneStatus, error) {
 	status := PaneStatus{Dead: dead, ExitCode: exitCode}
 
 	if !dead {
-		status.WaitingFor = m.detectWaiting(paneID)
+		result := m.detectWaiting(paneID)
+		status.WaitingFor = result.waitingFor
+		status.HasNumberedList = result.hasNumberedList
 	}
 
 	return status, nil
 }
 
-func (m *PaneMonitor) detectWaiting(paneID string) string {
+// classifyInfo holds the result of pane content classification.
+type classifyInfo struct {
+	waitingFor      string
+	hasNumberedList bool
+}
+
+func (m *PaneMonitor) detectWaiting(paneID string) classifyInfo {
 	content := capturePane(paneID)
 	if content == "" {
-		return ""
+		return classifyInfo{}
 	}
 
 	// Hash the content and compare with previous capture
@@ -84,13 +95,13 @@ func (m *PaneMonitor) detectWaiting(paneID string) string {
 	// stabilizes — some prompts have subtle animation (cursor, spinner)
 	// that prevents the hash from settling.
 	if waiting := m.classifyUnstablePane(content); waiting != "" {
-		return waiting
+		return classifyInfo{waitingFor: waiting}
 	}
 
 	// Content is still changing — Claude is actively working
 	// Require 2 consecutive stable polls (~4 seconds) before declaring waiting
 	if stable < 2 {
-		return ""
+		return classifyInfo{}
 	}
 
 	// Content is stable — classify what Claude is waiting for
@@ -112,7 +123,7 @@ func (m *PaneMonitor) classifyUnstablePane(content string) string {
 
 // classifyStablePane looks at a stable (non-changing) pane and determines
 // what kind of waiting state Claude is in.
-func (m *PaneMonitor) classifyStablePane(content string) string {
+func (m *PaneMonitor) classifyStablePane(content string) classifyInfo {
 	lines := strings.Split(content, "\n")
 
 	// Collect non-empty lines from the bottom (status area)
@@ -125,10 +136,13 @@ func (m *PaneMonitor) classifyStablePane(content string) string {
 	}
 
 	if len(bottomLines) == 0 {
-		return ""
+		return classifyInfo{}
 	}
 
 	bottom := strings.Join(bottomLines, "\n")
+
+	// Detect numbered option lists (e.g. AskUserQuestion prompts)
+	hasNumberedList := detectNumberedList(bottomLines)
 
 	// --- Still working even though content is stable ---
 	for _, indicator := range m.Patterns.WorkingIndicators {
@@ -141,7 +155,7 @@ func (m *PaneMonitor) classifyStablePane(content string) string {
 				match = false
 			}
 			if match {
-				return ""
+				return classifyInfo{}
 			}
 		}
 	}
@@ -154,18 +168,31 @@ func (m *PaneMonitor) classifyStablePane(content string) string {
 		if pattern.RequiresAlso != "" && !strings.Contains(bottom, pattern.RequiresAlso) {
 			continue
 		}
-		return "permission"
+		return classifyInfo{waitingFor: "permission", hasNumberedList: hasNumberedList}
 	}
 
 	// --- Idle at input prompt ---
 	for _, pattern := range m.Patterns.InputPatterns {
 		if strings.Contains(bottom, pattern.Contains) {
-			return "input"
+			return classifyInfo{waitingFor: "input", hasNumberedList: hasNumberedList}
 		}
 	}
 
 	// Fallback: content is stable and we can't identify the state.
-	return "unknown"
+	return classifyInfo{waitingFor: "unknown", hasNumberedList: hasNumberedList}
+}
+
+// detectNumberedList checks whether the bottom lines contain a numbered
+// option list (at least 2 items like "1. …", "2. …"). This is used to
+// distinguish AskUserQuestion prompts from idle input prompts.
+func detectNumberedList(bottomLines []string) bool {
+	count := 0
+	for _, line := range bottomLines {
+		if numberedListRegex.MatchString(line) {
+			count++
+		}
+	}
+	return count >= 2
 }
 
 func capturePane(paneID string) string {

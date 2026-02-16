@@ -468,3 +468,5 @@ time=2026-02-16T15:28:42.157+09:00 level=DEBUG msg="agent status change" id=a2 s
 time=2026-02-16T15:28:46.174+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
 time=2026-02-16T15:33:30.160+09:00 level=DEBUG msg="agent status change" id=a2 status=running
 time=2026-02-16T15:33:30.374+09:00 level=INFO msg="agent dismissed" id=a2 deleteBranch=false
+time=2026-02-16T15:34:04.458+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-16T17:52:39.215+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
