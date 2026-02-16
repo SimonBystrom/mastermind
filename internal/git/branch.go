@@ -108,6 +108,14 @@ func MergeInWorktree(wtPath, mergeBranch string) (conflicted bool, err error) {
 	return false, nil
 }
 
+func MergeAbort(wtPath string) error {
+	out, err := exec.Command("git", "-C", wtPath, "merge", "--abort").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to abort merge: %s (%w)", strings.TrimSpace(string(out)), err)
+	}
+	return nil
+}
+
 func MergeFFOnly(wtPath, branch string) error {
 	out, err := exec.Command("git", "-C", wtPath, "merge", "--ff-only", branch).CombinedOutput()
 	if err != nil {

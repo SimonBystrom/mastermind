@@ -1,20 +1,5 @@
 [
   {
-    "id": "a2",
-    "name": "",
-    "branch": "config/init",
-    "base_branch": "master",
-    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/config/init",
-    "tmux_window": "@47",
-    "tmux_pane_id": "%87",
-    "status": "running",
-    "waiting_for": "",
-    "ever_active": true,
-    "exit_code": 0,
-    "started_at": "2026-02-16T14:47:20.094028+09:00",
-    "finished_at": "0001-01-01T00:00:00Z"
-  },
-  {
     "id": "a1",
     "name": "",
     "branch": "preview/init",
@@ -29,5 +14,20 @@
     "started_at": "2026-02-15T20:29:08.191295+09:00",
     "finished_at": "2026-02-16T11:15:31.27058+09:00",
     "pre_review_commit": "20bbe144757c51d1a587bcafc377d231f0af4081"
+  },
+  {
+    "id": "a2",
+    "name": "",
+    "branch": "config/init",
+    "base_branch": "master",
+    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/config/init",
+    "tmux_window": "@47",
+    "tmux_pane_id": "%87",
+    "status": "running",
+    "waiting_for": "",
+    "ever_active": true,
+    "exit_code": 0,
+    "started_at": "2026-02-16T14:47:20.094028+09:00",
+    "finished_at": "0001-01-01T00:00:00Z"
   }
 ]

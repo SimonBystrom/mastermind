@@ -2,9 +2,11 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,6 +53,10 @@ type CleanupMsg struct {
 	Results []CleanupResult
 }
 
+type PreviewStartedMsg struct{ AgentID string }
+type PreviewStoppedMsg  struct{ AgentID string }
+type PreviewErrorMsg    struct{ AgentID string; Error string }
+
 type Orchestrator struct {
 	ctx         context.Context
 	store       *agent.Store
@@ -62,6 +68,10 @@ type Orchestrator struct {
 	statePath   string
 	git         git.GitOps
 	tmux        tmux.TmuxOps
+
+	previewAgentID    string // ID of agent being previewed (empty = no preview)
+	previewPrevBranch string // branch the main worktree was on before preview
+	previewPrevStatus agent.Status // agent's status before preview started
 }
 
 // Option configures an Orchestrator.
@@ -561,6 +571,187 @@ func (o *Orchestrator) Session() string {
 	return o.session
 }
 
+// --- Preview ---
+
+// previewState is persisted to disk so preview can be cleaned up on restart.
+type previewState struct {
+	AgentID    string       `json:"agent_id"`
+	PrevBranch string       `json:"prev_branch"`
+	PrevStatus agent.Status `json:"prev_status"`
+}
+
+func (o *Orchestrator) previewStatePath() string {
+	return filepath.Join(o.worktreeDir, "mastermind-preview.json")
+}
+
+func (o *Orchestrator) savePreviewState() {
+	ps := previewState{
+		AgentID:    o.previewAgentID,
+		PrevBranch: o.previewPrevBranch,
+		PrevStatus: o.previewPrevStatus,
+	}
+	data, err := json.MarshalIndent(ps, "", "  ")
+	if err != nil {
+		slog.Error("failed to marshal preview state", "error", err)
+		return
+	}
+	if err := os.WriteFile(o.previewStatePath(), data, 0o644); err != nil {
+		slog.Error("failed to save preview state", "error", err)
+	}
+}
+
+func (o *Orchestrator) deletePreviewState() {
+	os.Remove(o.previewStatePath())
+}
+
+func (o *Orchestrator) loadPreviewState() *previewState {
+	data, err := os.ReadFile(o.previewStatePath())
+	if err != nil {
+		return nil
+	}
+	var ps previewState
+	if err := json.Unmarshal(data, &ps); err != nil {
+		return nil
+	}
+	return &ps
+}
+
+func (o *Orchestrator) GetPreviewAgentID() string {
+	return o.previewAgentID
+}
+
+func (o *Orchestrator) PreviewAgent(id string) error {
+	if o.previewAgentID != "" {
+		return fmt.Errorf("preview already active for agent %s — stop it first", o.previewAgentID)
+	}
+
+	a, ok := o.store.Get(id)
+	if !ok {
+		return fmt.Errorf("agent %s not found", id)
+	}
+
+	status := a.GetStatus()
+	if status != agent.StatusReviewReady && status != agent.StatusReviewed && status != agent.StatusReviewing {
+		return fmt.Errorf("agent %s is not reviewable (status: %s)", id, status)
+	}
+
+	if o.git.HasChanges(o.repoPath) {
+		return fmt.Errorf("main worktree has uncommitted changes — commit or stash them first")
+	}
+
+	prevBranch, err := o.git.CurrentBranch(o.repoPath)
+	if err != nil {
+		return fmt.Errorf("get current branch: %w", err)
+	}
+
+	previewBranch := "preview/" + id
+	if err := o.git.CreateBranch(o.repoPath, previewBranch, a.BaseBranch); err != nil {
+		return fmt.Errorf("create preview branch: %w", err)
+	}
+
+	if err := o.git.CheckoutBranch(o.repoPath, previewBranch); err != nil {
+		o.git.DeleteBranch(o.repoPath, previewBranch)
+		return fmt.Errorf("checkout preview branch: %w", err)
+	}
+
+	conflicted, err := o.git.MergeInWorktree(o.repoPath, a.Branch)
+	if err != nil {
+		o.git.CheckoutBranch(o.repoPath, prevBranch)
+		o.git.DeleteBranch(o.repoPath, previewBranch)
+		return fmt.Errorf("merge agent branch: %w", err)
+	}
+	if conflicted {
+		o.git.MergeAbort(o.repoPath)
+		o.git.CheckoutBranch(o.repoPath, prevBranch)
+		o.git.DeleteBranch(o.repoPath, previewBranch)
+		return fmt.Errorf("merge conflicts between %s and %s — cannot preview", a.BaseBranch, a.Branch)
+	}
+
+	o.previewAgentID = id
+	o.previewPrevBranch = prevBranch
+	o.previewPrevStatus = status
+	a.SetStatus(agent.StatusPreviewing)
+	o.savePreviewState()
+
+	slog.Info("preview started", "agent", id, "branch", previewBranch, "prevBranch", prevBranch)
+	if o.program != nil {
+		o.program.Send(PreviewStartedMsg{AgentID: id})
+	}
+	return nil
+}
+
+func (o *Orchestrator) StopPreview() error {
+	if o.previewAgentID == "" {
+		return fmt.Errorf("no preview is active")
+	}
+
+	agentID := o.previewAgentID
+	previewBranch := "preview/" + agentID
+
+	if err := o.git.CheckoutBranch(o.repoPath, o.previewPrevBranch); err != nil {
+		return fmt.Errorf("checkout previous branch: %w", err)
+	}
+
+	if err := o.git.DeleteBranch(o.repoPath, previewBranch); err != nil {
+		slog.Warn("failed to delete preview branch", "branch", previewBranch, "error", err)
+	}
+
+	// Restore agent's previous status
+	if a, ok := o.store.Get(agentID); ok {
+		a.SetStatus(o.previewPrevStatus)
+	}
+
+	o.previewAgentID = ""
+	o.previewPrevBranch = ""
+	o.previewPrevStatus = ""
+	o.deletePreviewState()
+
+	slog.Info("preview stopped", "agent", agentID)
+	if o.program != nil {
+		o.program.Send(PreviewStoppedMsg{AgentID: agentID})
+	}
+	return nil
+}
+
+// CleanupPreview stops any active preview, restoring the main worktree.
+// Called on shutdown to ensure no orphaned preview branches.
+func (o *Orchestrator) CleanupPreview() {
+	// Try to restore from persisted state if not already loaded
+	if o.previewAgentID == "" {
+		if ps := o.loadPreviewState(); ps != nil {
+			o.previewAgentID = ps.AgentID
+			o.previewPrevBranch = ps.PrevBranch
+			o.previewPrevStatus = ps.PrevStatus
+		}
+	}
+
+	if o.previewAgentID == "" {
+		return
+	}
+
+	previewBranch := "preview/" + o.previewAgentID
+
+	if err := o.git.CheckoutBranch(o.repoPath, o.previewPrevBranch); err != nil {
+		slog.Error("cleanup: failed to checkout previous branch", "branch", o.previewPrevBranch, "error", err)
+	}
+
+	if o.git.BranchExists(o.repoPath, previewBranch) {
+		if err := o.git.DeleteBranch(o.repoPath, previewBranch); err != nil {
+			slog.Error("cleanup: failed to delete preview branch", "branch", previewBranch, "error", err)
+		}
+	}
+
+	if a, ok := o.store.Get(o.previewAgentID); ok {
+		a.SetStatus(o.previewPrevStatus)
+	}
+
+	o.previewAgentID = ""
+	o.previewPrevBranch = ""
+	o.previewPrevStatus = ""
+	o.deletePreviewState()
+	slog.Info("preview cleaned up on shutdown")
+}
+
 // RecoverAgents restores agents from persisted state, validating that
 // their tmux panes and worktree directories still exist.
 func (o *Orchestrator) RecoverAgents() {
@@ -617,6 +808,14 @@ func (o *Orchestrator) RecoverAgents() {
 
 	if recovered > 0 {
 		slog.Info("agent recovery complete", "recovered", recovered, "total", len(persisted))
+	}
+
+	// Recover preview state
+	if ps := o.loadPreviewState(); ps != nil && ps.AgentID != "" {
+		o.previewAgentID = ps.AgentID
+		o.previewPrevBranch = ps.PrevBranch
+		o.previewPrevStatus = ps.PrevStatus
+		slog.Info("recovered preview state", "agent", ps.AgentID, "prevBranch", ps.PrevBranch)
 	}
 }
 

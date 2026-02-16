@@ -174,6 +174,42 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		}
 		return m, nil
 
+	case orchestrator.PreviewStartedMsg:
+		a, ok := m.store.Get(msg.AgentID)
+		name := msg.AgentID
+		if ok && a.Name != "" {
+			name = a.Name
+		}
+		m.notifications = append(m.notifications, notification{
+			text:  fmt.Sprintf("Preview started for agent %s", name),
+			time:  time.Now(),
+			style: previewingStyle,
+		})
+		if len(m.notifications) > 10 {
+			m.notifications = m.notifications[len(m.notifications)-10:]
+		}
+		return m, nil
+
+	case orchestrator.PreviewStoppedMsg:
+		a, ok := m.store.Get(msg.AgentID)
+		name := msg.AgentID
+		if ok && a.Name != "" {
+			name = a.Name
+		}
+		m.notifications = append(m.notifications, notification{
+			text:  fmt.Sprintf("Preview stopped for agent %s", name),
+			time:  time.Now(),
+			style: doneStyle,
+		})
+		if len(m.notifications) > 10 {
+			m.notifications = m.notifications[len(m.notifications)-10:]
+		}
+		return m, nil
+
+	case orchestrator.PreviewErrorMsg:
+		m.err = msg.Error
+		return m, nil
+
 	case orchestrator.AgentWaitingMsg:
 		a, ok := m.store.Get(msg.AgentID)
 		name := msg.AgentID
@@ -308,6 +344,28 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 					m.notifications = m.notifications[len(m.notifications)-10:]
 				}
 			}
+		case "p":
+			if len(agents) > 0 && m.cursor < len(agents) {
+				a := agents[m.cursor]
+				previewID := m.orch.GetPreviewAgentID()
+				if previewID != "" && previewID == a.ID {
+					// Stop preview for this agent
+					if err := m.orch.StopPreview(); err != nil {
+						m.err = err.Error()
+					}
+				} else if previewID != "" {
+					previewAgent, ok := m.store.Get(previewID)
+					previewName := previewID
+					if ok && previewAgent.Name != "" {
+						previewName = previewAgent.Name
+					}
+					m.err = fmt.Sprintf("preview already active for agent %s — press p on that agent to stop it first", previewName)
+				} else {
+					if err := m.orch.PreviewAgent(a.ID); err != nil {
+						m.err = err.Error()
+					}
+				}
+			}
 		case "D":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
@@ -337,12 +395,13 @@ func (m dashboardModel) sortedAgents() []*agent.Agent {
 		statusOrder := map[agent.Status]int{
 			agent.StatusConflicts:   0,
 			agent.StatusWaiting:     1,
-			agent.StatusReviewed:    2,
-			agent.StatusReviewReady: 3,
-			agent.StatusRunning:     4,
-			agent.StatusReviewing:   5,
-			agent.StatusDone:        6,
-			agent.StatusDismissed:   7,
+			agent.StatusPreviewing:  2,
+			agent.StatusReviewed:    3,
+			agent.StatusReviewReady: 4,
+			agent.StatusRunning:     5,
+			agent.StatusReviewing:   6,
+			agent.StatusDone:        7,
+			agent.StatusDismissed:   8,
 		}
 		sort.Slice(agents, func(i, j int) bool {
 			oi := statusOrder[agents[i].GetStatus()]
@@ -385,7 +444,24 @@ func (m dashboardModel) ViewContent() string {
 	// Title
 	title := titleStyle.Render(fmt.Sprintf("repo: %s — session: %s", m.repoPath, m.session))
 	b.WriteString(title)
-	b.WriteString("\n\n")
+	b.WriteString("\n")
+
+	// Preview banner
+	if previewID := m.orch.GetPreviewAgentID(); previewID != "" {
+		previewAgent, ok := m.store.Get(previewID)
+		previewName := previewID
+		previewBranch := ""
+		if ok {
+			if previewAgent.Name != "" {
+				previewName = previewAgent.Name
+			}
+			previewBranch = previewAgent.Branch
+		}
+		banner := fmt.Sprintf("  PREVIEW ACTIVE: %s (branch %s) — p to stop", previewName, previewBranch)
+		b.WriteString(previewBannerStyle.Render(banner))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 
 	// Agent table
 	agents := m.sortedAgents()
@@ -427,6 +503,8 @@ func (m dashboardModel) ViewContent() string {
 				styledStatus = reviewingStyle.Render("reviewing")
 			case agent.StatusReviewed:
 				styledStatus = reviewedStyle.Render("reviewed")
+			case agent.StatusPreviewing:
+				styledStatus = previewingStyle.Render("previewing")
 			case agent.StatusConflicts:
 				styledStatus = conflictsStyle.Render("conflicts")
 			default:
@@ -441,6 +519,8 @@ func (m dashboardModel) ViewContent() string {
 				indicator = " " + reviewReadyStyle.Render("◀")
 			case agent.StatusReviewed:
 				indicator = " " + reviewedStyle.Render("◀")
+			case agent.StatusPreviewing:
+				indicator = " " + previewingStyle.Render("◀")
 			case agent.StatusConflicts:
 				indicator = " " + conflictsStyle.Render("◀")
 			case agent.StatusWaiting:
@@ -501,7 +581,7 @@ func (m dashboardModel) ViewContent() string {
 
 	// Help
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ m: merge │ d: dismiss │ D: dismiss+delete │ s: sort (%s) │ q: quit", m.sortLabel())))
+	b.WriteString(helpStyle.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ p: preview │ m: merge │ d: dismiss │ D: dismiss+delete │ s: sort (%s) │ q: quit", m.sortLabel())))
 
 	return b.String()
 }
