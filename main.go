@@ -19,10 +19,29 @@ import (
 	"github.com/simonbystrom/mastermind/internal/ui"
 )
 
+var version = "dev"
+
 func main() {
 	repo := flag.String("repo", "", "path to git repository (defaults to current directory)")
 	session := flag.String("session", "", "tmux session name (defaults to current session)")
+	showVersion := flag.Bool("version", false, "print version and exit")
+	initConfig := flag.Bool("init-config", false, "write default config file and print its path")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("mastermind " + version)
+		os.Exit(0)
+	}
+
+	if *initConfig {
+		path := config.Path()
+		if err := config.WriteDefault(path); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(path)
+		os.Exit(0)
+	}
 
 	if *repo == "" {
 		cwd, err := os.Getwd()
