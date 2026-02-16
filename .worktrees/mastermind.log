@@ -417,3 +417,23 @@ time=2026-02-15T17:40:18.771+09:00 level=INFO msg="agent idle with changes" id=a
 time=2026-02-15T20:25:41.283+09:00 level=DEBUG msg="agent status change" id=a2 status=running
 time=2026-02-15T20:25:42.505+09:00 level=INFO msg="merge completed" id=a2 branch=tests/visuals base=master
 time=2026-02-15T20:25:42.545+09:00 level=INFO msg="agent cleaned up after merge" id=a2 removeWorktree=true deleteBranch=true
+time=2026-02-15T20:28:51.864+09:00 level=INFO msg="mastermind starting" repo=/Users/simonbystrom/code/mastermind session=mastermind tmuxVersion="tmux 3.6a"
+time=2026-02-15T20:29:08.191+09:00 level=INFO msg="agent spawned" id=a1 branch=preview/init name=""
+time=2026-02-15T20:29:29.955+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=unknown
+time=2026-02-15T20:29:31.900+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T20:31:41.955+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-15T20:35:07.894+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T20:37:31.922+09:00 level=INFO msg="agent idle without changes" id=a1
+time=2026-02-15T20:44:27.901+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-15T20:45:41.937+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-16T11:11:59.205+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-16T11:15:31.270+09:00 level=INFO msg="agent idle with changes" id=a1
+time=2026-02-16T14:47:20.094+09:00 level=INFO msg="agent spawned" id=a2 branch=config/init name=""
+time=2026-02-16T14:48:20.212+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=unknown
+time=2026-02-16T14:48:24.144+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-16T14:48:28.145+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=unknown
+time=2026-02-16T14:48:32.165+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-16T14:49:12.148+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-16T14:49:16.129+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-16T14:49:26.184+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
+time=2026-02-16T14:49:34.170+09:00 level=DEBUG msg="agent status change" id=a2 status=running
