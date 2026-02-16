@@ -23,11 +23,11 @@
     "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/config/init",
     "tmux_window": "@47",
     "tmux_pane_id": "%87",
-    "status": "running",
+    "status": "done",
     "waiting_for": "",
     "ever_active": true,
     "exit_code": 0,
     "started_at": "2026-02-16T14:47:20.094028+09:00",
-    "finished_at": "0001-01-01T00:00:00Z"
+    "finished_at": "2026-02-16T14:50:58.197298+09:00"
   }
 ]

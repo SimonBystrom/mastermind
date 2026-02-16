@@ -437,3 +437,4 @@ time=2026-02-16T14:49:12.148+09:00 level=DEBUG msg="agent status change" id=a1 s
 time=2026-02-16T14:49:16.129+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
 time=2026-02-16T14:49:26.184+09:00 level=DEBUG msg="agent status change" id=a2 status=waiting waitingFor=permission
 time=2026-02-16T14:49:34.170+09:00 level=DEBUG msg="agent status change" id=a2 status=running
+time=2026-02-16T14:50:58.197+09:00 level=INFO msg="agent idle without changes" id=a2
