@@ -354,8 +354,11 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 				previewID := m.orch.GetPreviewAgentID()
 				if previewID != "" && previewID == a.ID {
 					// Stop preview for this agent
-					if err := m.orch.StopPreview(); err != nil {
-						m.err = err.Error()
+					return m, func() tea.Msg {
+						if err := m.orch.StopPreview(); err != nil {
+							return orchestrator.PreviewErrorMsg{AgentID: a.ID, Error: err.Error()}
+						}
+						return nil
 					}
 				} else if previewID != "" {
 					previewAgent, ok := m.store.Get(previewID)
@@ -365,8 +368,11 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 					}
 					m.err = fmt.Sprintf("preview already active for agent %s — press p on that agent to stop it first", previewName)
 				} else {
-					if err := m.orch.PreviewAgent(a.ID); err != nil {
-						m.err = err.Error()
+					return m, func() tea.Msg {
+						if err := m.orch.PreviewAgent(a.ID); err != nil {
+							return orchestrator.PreviewErrorMsg{AgentID: a.ID, Error: err.Error()}
+						}
+						return nil
 					}
 				}
 			}
