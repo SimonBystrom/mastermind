@@ -321,12 +321,7 @@ func (o *Orchestrator) StartMonitor() {
 			// another prompt to any agent, so we always need to re-classify
 			// pane content to detect when an idle agent starts working again.
 
-			if paneStatus.WaitingFor != "" && a.GetEverActive() && o.git.HasChanges(a.WorktreePath) {
-				// Agent was active and has changes — review ready, regardless
-				// of what the pattern matcher thinks (avoids false "permission"
-				// detection when Claude is actually idle with changes).
-				o.handleAgentIdle(a)
-			} else if paneStatus.WaitingFor == "permission" {
+			if paneStatus.WaitingFor == "permission" {
 				// Claude needs permission approval
 				a.SetEverActive(true)
 				if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
