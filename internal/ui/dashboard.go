@@ -280,7 +280,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 						m.err = err.Error()
 					}
 					// Status stays StatusConflicts
-				case agent.StatusRunning, agent.StatusWaiting, agent.StatusReviewing, agent.StatusDone:
+				case agent.StatusRunning, agent.StatusWaiting, agent.StatusReviewing, agent.StatusDone, agent.StatusPreviewing:
 					if err := m.orch.FocusAgent(a.ID); err != nil {
 						m.err = err.Error()
 					}
