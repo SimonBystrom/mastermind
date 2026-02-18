@@ -44,7 +44,6 @@ var DefaultPatterns = MonitorPatterns{
 	},
 	PermissionPatterns: []PatternRule{
 		// Tool permission prompts
-		{Contains: "accept edits"},
 		{Contains: "Yes", RequiresAlso: "No"},
 		{Contains: "Allow", RequiresAlso: "Deny"},
 		{Contains: "allow for"},
