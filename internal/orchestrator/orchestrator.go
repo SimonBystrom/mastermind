@@ -330,9 +330,9 @@ func (o *Orchestrator) StartMonitor() {
 					a.SetWaitingFor("")
 					slog.Debug("agent status change", "id", a.ID, "status", "running")
 				}
-			} else if paneStatus.HasNumberedList {
-				// Pane has a numbered option list (e.g. AskUserQuestion) —
-				// this needs user attention regardless of git state.
+			} else if paneStatus.WaitingFor == "permission" {
+				// A permission pattern matched (e.g. "Chat about this",
+				// "Yes/No", "Allow/Deny") — agent needs user attention.
 				a.SetEverActive(true)
 				if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
 					a.SetStatus(agent.StatusWaiting)

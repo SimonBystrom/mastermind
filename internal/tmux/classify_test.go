@@ -91,6 +91,30 @@ func TestClassifyStablePane(t *testing.T) {
 			wantWaitingFor:  "input",
 			wantNumberedList: false,
 		},
+		{
+			name:            "completion summary is not a prompt",
+			content:         "\n\n1. Fixed the authentication bug\n2. Updated the test cases\n3. Refactored error handling\nfor shortcuts\n",
+			wantWaitingFor:  "input",
+			wantNumberedList: false,
+		},
+		{
+			name:            "completion summary with various verbs",
+			content:         "\n\n1. Added new validation logic\n2. Removed deprecated imports\n3. Cleaned up unused variables\n4. Implemented retry mechanism\nfor shortcuts\n",
+			wantWaitingFor:  "input",
+			wantNumberedList: false,
+		},
+		{
+			name:            "mixed list with mostly summary verbs",
+			content:         "\n\n1. Fixed the bug\n2. Updated tests\n3. Check the output\nfor shortcuts\n",
+			wantWaitingFor:  "input",
+			wantNumberedList: false,
+		},
+		{
+			name:            "actual prompt options not filtered",
+			content:         "\n\nWhich approach?\n1. Use Redis caching\n2. Use in-memory cache\n3. Use file-based cache\nChat about this\n",
+			wantWaitingFor:  "permission",
+			wantNumberedList: true,
+		},
 	}
 
 	for _, tt := range tests {

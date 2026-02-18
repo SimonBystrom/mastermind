@@ -12,6 +12,11 @@ import (
 
 var numberedListRegex = regexp.MustCompile(`^\d+\.\s`)
 
+// completionVerbRegex matches numbered list items that start with a past-tense
+// verb (e.g. "1. Fixed ...", "2. Updated ..."), indicating a summary of
+// completed work rather than an interactive prompt asking for user input.
+var completionVerbRegex = regexp.MustCompile(`(?i)^\d+\.\s+(fixed|added|updated|created|removed|refactored|implemented|changed|moved|renamed|deleted|resolved|configured|installed|upgraded|cleaned|improved|converted|enabled|disabled|replaced|merged|extracted|simplified|optimized|reorganized|wrapped|adjusted|corrected|patched|migrated|set up|handled|ensured|introduced|rewrote|modified|integrated|applied|addressed|extended|standardized|consolidated|split|separated|normalized|aligned|documented)\b`)
+
 // PaneMonitor tracks pane content over time to detect when Claude is waiting.
 // If the visible pane content is changing between polls, Claude is working.
 // If it's stable, we classify what it's waiting for.
@@ -183,16 +188,24 @@ func (m *PaneMonitor) classifyStablePane(content string) classifyInfo {
 }
 
 // detectNumberedList checks whether the bottom lines contain a numbered
-// option list (at least 2 items like "1. …", "2. …"). This is used to
-// distinguish AskUserQuestion prompts from idle input prompts.
+// option list (at least 2 items like "1. …", "2. …") that looks like an
+// interactive prompt. Returns false if the items appear to be a completion
+// summary (starting with past-tense verbs like "Fixed", "Updated", etc.).
 func detectNumberedList(bottomLines []string) bool {
-	count := 0
+	var numbered, summaryVerbs int
 	for _, line := range bottomLines {
 		if numberedListRegex.MatchString(line) {
-			count++
+			numbered++
+			if completionVerbRegex.MatchString(line) {
+				summaryVerbs++
+			}
 		}
 	}
-	return count >= 2
+	if numbered < 2 {
+		return false
+	}
+	// If most items start with past-tense verbs, it's a summary, not a prompt.
+	return summaryVerbs < numbered/2
 }
 
 func capturePane(paneID string) string {
