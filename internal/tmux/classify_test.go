@@ -19,9 +19,14 @@ func TestClassifyStablePane(t *testing.T) {
 			wantWaitingFor: "",
 		},
 		{
-			name:           "accept edits permission",
+			name:           "accept edits with yes/no permission",
 			content:        "\n\nSome output\nDo you want to accept edits to file.go?\nYes  No\n",
 			wantWaitingFor: "permission",
+		},
+		{
+			name:           "accept edits banner is not permission",
+			content:        "\n\nBuild passes cleanly.\n✻ Brewed for 3m 0s\n❯ commit this\n>> accept edits on (shift+tab to cycle) · 5 files +50 -76\n",
+			wantWaitingFor: "unknown",
 		},
 		{
 			name:           "yes and no permission",
