@@ -504,3 +504,10 @@ time=2026-02-18T17:15:23.542+09:00 level=DEBUG msg="agent status change" id=a1 s
 time=2026-02-18T17:15:34.194+09:00 level=INFO msg="agent spawned" id=a1 branch=statuses name=""
 time=2026-02-18T17:16:13.603+09:00 level=INFO msg="agent idle without changes" id=a1
 time=2026-02-18T17:16:35.549+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-18T17:23:27.565+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-18T17:24:55.556+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-18T17:25:31.547+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-18T17:26:45.543+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-18T17:27:05.556+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
+time=2026-02-18T17:27:09.557+09:00 level=DEBUG msg="agent status change" id=a1 status=running
+time=2026-02-18T17:27:21.554+09:00 level=DEBUG msg="agent status change" id=a1 status=waiting waitingFor=permission
