@@ -81,31 +81,32 @@ The config uses TOML format:
 
 ```toml
 [colors]
-# All values are xterm-256 color codes (0-255).
-# title          = "170"
-# header         = "39"
-# selected_bg    = "236"
-# selected_fg    = "255"
-# running        = "34"
-# review_ready   = "49"
-# done           = "241"
-# waiting        = "214"
-# permission     = "220"
-# reviewing      = "99"
-# reviewed       = "76"
-# conflicts      = "196"
-# notification   = "245"
-# help           = "241"
-# border         = "62"
-# separator      = "62"
-# wizard_title   = "170"
-# wizard_active  = "170"
-# wizard_dim     = "241"
-# error          = "196"
-# attention      = "208"
-# logo           = "170"
-# previewing     = "213"
-# preview_banner = "213"
+# Values can be hex (#rrggbb) or xterm-256 codes (0-255).
+# Defaults use the Catppuccin Mocha palette.
+# title          = "#cba6f7"  # Mauve
+# header         = "#89b4fa"  # Blue
+# selected_bg    = "#313244"  # Surface 0
+# selected_fg    = "#cdd6f4"  # Text
+# running        = "#89b4fa"  # Blue
+# review_ready   = "#94e2d5"  # Teal
+# done           = "#7f849c"  # Overlay 1
+# waiting        = "#f9e2af"  # Yellow
+# permission     = "#fab387"  # Peach
+# reviewing      = "#b4befe"  # Lavender
+# reviewed       = "#a6e3a1"  # Green
+# conflicts      = "#f38ba8"  # Red
+# notification   = "#a6adc8"  # Subtext 0
+# help           = "#7f849c"  # Overlay 1
+# border         = "#585b70"  # Surface 2
+# separator      = "#585b70"  # Surface 2
+# wizard_title   = "#cba6f7"  # Mauve
+# wizard_active  = "#cba6f7"  # Mauve
+# wizard_dim     = "#7f849c"  # Overlay 1
+# error          = "#f38ba8"  # Red
+# attention      = "#fab387"  # Peach
+# logo           = "#cba6f7"  # Mauve
+# previewing     = "#f5c2e7"  # Pink
+# preview_banner = "#f5c2e7"  # Pink
 
 [layout]
 # dashboard_width = 55   # percentage of terminal width for left panel

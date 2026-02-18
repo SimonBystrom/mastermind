@@ -7,7 +7,8 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Colors holds xterm-256 color codes for every UI style.
+// Colors holds color values for every UI style.
+// Values can be xterm-256 codes (0-255) or hex colors (#rrggbb).
 type Colors struct {
 	Title         string `toml:"title"`
 	Header        string `toml:"header"`
@@ -51,30 +52,30 @@ type Config struct {
 func Default() Config {
 	return Config{
 		Colors: Colors{
-			Title:         "170",
-			Header:        "39",
-			SelectedBG:    "236",
-			SelectedFG:    "255",
-			Running:       "34",
-			ReviewReady:   "49",
-			Done:          "241",
-			Waiting:       "214",
-			Permission:    "220",
-			Reviewing:     "99",
-			Reviewed:      "76",
-			Conflicts:     "196",
-			Notification:  "245",
-			Help:          "241",
-			Border:        "62",
-			Separator:     "62",
-			WizardTitle:   "170",
-			WizardActive:  "170",
-			WizardDim:     "241",
-			Error:         "196",
-			Attention:     "208",
-			Logo:          "170",
-			Previewing:    "213",
-			PreviewBanner: "213",
+			Title:         "#cba6f7", // Mauve
+			Header:        "#89b4fa", // Blue
+			SelectedBG:    "#313244", // Surface 0
+			SelectedFG:    "#cdd6f4", // Text
+			Running:       "#89b4fa", // Blue
+			ReviewReady:   "#94e2d5", // Teal
+			Done:          "#7f849c", // Overlay 1
+			Waiting:       "#f9e2af", // Yellow
+			Permission:    "#fab387", // Peach
+			Reviewing:     "#b4befe", // Lavender
+			Reviewed:      "#a6e3a1", // Green
+			Conflicts:     "#f38ba8", // Red
+			Notification:  "#a6adc8", // Subtext 0
+			Help:          "#7f849c", // Overlay 1
+			Border:        "#585b70", // Surface 2
+			Separator:     "#585b70", // Surface 2
+			WizardTitle:   "#cba6f7", // Mauve
+			WizardActive:  "#cba6f7", // Mauve
+			WizardDim:     "#7f849c", // Overlay 1
+			Error:         "#f38ba8", // Red
+			Attention:     "#fab387", // Peach
+			Logo:          "#cba6f7", // Mauve
+			Previewing:    "#f5c2e7", // Pink
+			PreviewBanner: "#f5c2e7", // Pink
 		},
 		Layout: Layout{
 			DashboardWidth: 55,
@@ -116,33 +117,34 @@ func Load() (Config, error) {
 
 const defaultFileContent = `# Mastermind configuration
 # Uncomment and modify values to customize. All values are optional.
-# Colors use xterm-256 color codes (0-255).
+# Colors can be hex (#rrggbb) or xterm-256 codes (0-255).
+# Defaults use the Catppuccin Mocha palette.
 
 [colors]
-# title          = "170"
-# header         = "39"
-# selected_bg    = "236"
-# selected_fg    = "255"
-# running        = "34"
-# review_ready   = "49"
-# done           = "241"
-# waiting        = "214"
-# permission     = "220"
-# reviewing      = "99"
-# reviewed       = "76"
-# conflicts      = "196"
-# notification   = "245"
-# help           = "241"
-# border         = "62"
-# separator      = "62"
-# wizard_title   = "170"
-# wizard_active  = "170"
-# wizard_dim     = "241"
-# error          = "196"
-# attention      = "208"
-# logo           = "170"
-# previewing     = "213"
-# preview_banner = "213"
+# title          = "#cba6f7"  # Mauve
+# header         = "#89b4fa"  # Blue
+# selected_bg    = "#313244"  # Surface 0
+# selected_fg    = "#cdd6f4"  # Text
+# running        = "#89b4fa"  # Blue
+# review_ready   = "#94e2d5"  # Teal
+# done           = "#7f849c"  # Overlay 1
+# waiting        = "#f9e2af"  # Yellow
+# permission     = "#fab387"  # Peach
+# reviewing      = "#b4befe"  # Lavender
+# reviewed       = "#a6e3a1"  # Green
+# conflicts      = "#f38ba8"  # Red
+# notification   = "#a6adc8"  # Subtext 0
+# help           = "#7f849c"  # Overlay 1
+# border         = "#585b70"  # Surface 2
+# separator      = "#585b70"  # Surface 2
+# wizard_title   = "#cba6f7"  # Mauve
+# wizard_active  = "#cba6f7"  # Mauve
+# wizard_dim     = "#7f849c"  # Overlay 1
+# error          = "#f38ba8"  # Red
+# attention      = "#fab387"  # Peach
+# logo           = "#cba6f7"  # Mauve
+# previewing     = "#f5c2e7"  # Pink
+# preview_banner = "#f5c2e7"  # Pink
 
 [layout]
 # dashboard_width = 55   # percentage of terminal width for left panel
