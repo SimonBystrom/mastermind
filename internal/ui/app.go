@@ -70,9 +70,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.FocusMsg:
-		// When the tmux pane regains focus, force an immediate tick so
-		// durations are up-to-date without waiting for the next 1-second tick.
-		return m, tickCmd()
+		// When the tmux pane regains focus, force a full repaint so the
+		// screen is correct after tmux restores its buffer, and schedule
+		// an immediate tick so durations update without waiting.
+		return m, tea.Batch(tea.ClearScreen, tickCmd())
 
 	case tickMsg:
 		// Always keep the tick chain alive regardless of active view,
