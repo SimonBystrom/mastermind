@@ -306,8 +306,7 @@ func (o *Orchestrator) StartMonitor() {
 
 			switch status {
 			case agent.StatusRunning, agent.StatusWaiting,
-				agent.StatusReviewReady, agent.StatusDone,
-				agent.StatusReviewed:
+				agent.StatusReviewReady, agent.StatusDone:
 				// These statuses need monitoring
 			default:
 				continue
@@ -469,6 +468,10 @@ func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 }
 
 func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
+	// Don't overwrite reviewed status — it must stick until merge or manual change
+	if a.GetStatus() == agent.StatusReviewed {
+		return
+	}
 	hasChanges := o.git.HasChanges(a.WorktreePath)
 	if hasChanges {
 		if a.GetStatus() != agent.StatusReviewReady {
