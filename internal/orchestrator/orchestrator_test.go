@@ -308,7 +308,7 @@ func TestSpawnAgent_Success(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	err := o.SpawnAgent("myagent", "feat/x", "main", true)
+	err := o.SpawnAgent("feat/x", "main", true)
 	if err != nil {
 		t.Fatalf("SpawnAgent: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestSpawnAgent_Success(t *testing.T) {
 	if !mg.hasCalled("CreateWorktree:feat/x") {
 		t.Error("expected CreateWorktree call")
 	}
-	if !mt.hasCalled("NewWindow:myagent") {
+	if !mt.hasCalled("NewWindow:feat/x") {
 		t.Error("expected NewWindow call")
 	}
 
@@ -341,8 +341,8 @@ func TestSpawnAgent_DuplicateBranch(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("a1", "feat/x", "main", true)
-	err := o.SpawnAgent("a2", "feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true)
+	err := o.SpawnAgent("feat/x", "main", true)
 	if err == nil {
 		t.Fatal("expected error for duplicate branch")
 	}
@@ -354,7 +354,7 @@ func TestSpawnAgent_BranchCheckedOut(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	err := o.SpawnAgent("a1", "feat/x", "", false)
+	err := o.SpawnAgent("feat/x", "", false)
 	if err == nil {
 		t.Fatal("expected error for checked-out branch")
 	}
@@ -366,7 +366,7 @@ func TestSpawnAgent_TmuxFails_CleansUpWorktree(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	err := o.SpawnAgent("a1", "feat/x", "main", true)
+	err := o.SpawnAgent("feat/x", "main", true)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -395,7 +395,7 @@ func TestDismissAgent_Success(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("a1", "feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true)
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -430,7 +430,7 @@ func TestDismissAgent_WithDeleteBranch(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("a1", "feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true)
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -446,7 +446,7 @@ func TestMergeAgent_NoConflicts(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("a1", "feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true)
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -473,7 +473,7 @@ func TestMergeAgent_WithConflicts(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("a1", "feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true)
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -504,7 +504,7 @@ func TestMergeAgent_UncommittedChanges(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("a1", "feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true)
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -520,7 +520,7 @@ func TestHandleAgentFinished_WithChanges(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	a := agent.NewAgent("a1", "feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
 	o.store.Add(a)
 
 	o.handleAgentFinished(a, 0)
@@ -536,7 +536,7 @@ func TestHandleAgentFinished_NoChanges(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	a := agent.NewAgent("a1", "feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
 	o.store.Add(a)
 
 	o.handleAgentFinished(a, 0)
@@ -552,7 +552,7 @@ func TestHandleLazygitClosed_NewCommits(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	a := agent.NewAgent("a1", "feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
 	a.SetPreReviewCommit("oldcommit")
 	a.SetLazygitPaneID("%2")
 	o.store.Add(a)
@@ -573,7 +573,7 @@ func TestHandleLazygitClosed_NoNewCommits(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	a := agent.NewAgent("a1", "feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
 	a.SetPreReviewCommit("samecommit")
 	a.SetLazygitPaneID("%2")
 	o.store.Add(a)
@@ -592,9 +592,9 @@ func TestCleanupDeadAgents(t *testing.T) {
 	o := newTestOrch(t, mg, mt, mm)
 
 	// Manually add agents (bypass SpawnAgent since we don't want real tmux)
-	a1 := agent.NewAgent("dead1", "feat/a", "main", "/nonexistent", "@1", "%1")
+	a1 := agent.NewAgent("feat/a", "main", "/nonexistent", "@1", "%1")
 	a1.ID = "a1"
-	a2 := agent.NewAgent("dead2", "feat/b", "main", "/nonexistent", "@2", "%2")
+	a2 := agent.NewAgent("feat/b", "main", "/nonexistent", "@2", "%2")
 	a2.ID = "a2"
 	o.store.Add(a1)
 	o.store.Add(a2)
@@ -629,7 +629,6 @@ func TestRecoverAgents(t *testing.T) {
 	// Create persisted state with an agent whose worktree dir exists
 	a := &agent.Agent{
 		ID:           "a1",
-		Name:         "recovered",
 		Branch:       "feat/r",
 		BaseBranch:   "main",
 		WorktreePath: dir, // use tempdir as worktree (it exists)
@@ -646,8 +645,5 @@ func TestRecoverAgents(t *testing.T) {
 	agents := o.store.All()
 	if len(agents) != 1 {
 		t.Fatalf("expected 1 recovered agent, got %d", len(agents))
-	}
-	if agents[0].Name != "recovered" {
-		t.Errorf("agent name = %q", agents[0].Name)
 	}
 }

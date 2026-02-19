@@ -10,7 +10,6 @@ import (
 // PersistedAgent is the JSON-serializable representation of an Agent.
 type PersistedAgent struct {
 	ID           string    `json:"id"`
-	Name         string    `json:"name"`
 	Branch       string    `json:"branch"`
 	BaseBranch   string    `json:"base_branch"`
 	WorktreePath string    `json:"worktree_path"`
@@ -32,7 +31,6 @@ func SaveState(path string, agents []*Agent) error {
 	for i, a := range agents {
 		persisted[i] = PersistedAgent{
 			ID:           a.ID,
-			Name:         a.Name,
 			Branch:       a.Branch,
 			BaseBranch:   a.BaseBranch,
 			WorktreePath: a.WorktreePath,

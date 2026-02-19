@@ -17,7 +17,6 @@ const (
 	stepChooseMode spawnStep = iota
 	stepPickBranch
 	stepNewBranchName
-	stepAgentName
 	stepConfirm
 )
 
@@ -49,13 +48,9 @@ type spawnModel struct {
 	// New branch name input
 	branchInput textinput.Model
 
-	// Agent name input
-	nameInput textinput.Model
-
 	// Computed
 	baseBranch   string
 	branch       string
-	agentName    string
 	createBranch bool
 }
 
@@ -69,16 +64,12 @@ func newSpawn(s Styles, orch *orchestrator.Orchestrator, repoPath string) spawnM
 	bi := textinput.New()
 	bi.Placeholder = "new branch name (e.g. feat/my-feature)"
 
-	ni := textinput.New()
-	ni.Placeholder = "agent name (optional)"
-
 	return spawnModel{
 		orch:         orch,
 		repoPath:     repoPath,
 		step:         stepChooseMode,
 		branchFilter: bf,
 		branchInput:  bi,
-		nameInput:    ni,
 		styles:       s,
 	}
 }
@@ -129,7 +120,6 @@ func (m spawnModel) Update(msg tea.Msg) (spawnModel, tea.Cmd) {
 			m.branchCursor = 0
 			m.branchFilter.SetValue("")
 			m.branchInput.SetValue("")
-			m.nameInput.SetValue("")
 			return m, nil
 		}
 
@@ -140,8 +130,6 @@ func (m spawnModel) Update(msg tea.Msg) (spawnModel, tea.Cmd) {
 			return m.updatePickBranch(msg)
 		case stepNewBranchName:
 			return m.updateNewBranchName(msg)
-		case stepAgentName:
-			return m.updateAgentName(msg)
 		case stepConfirm:
 			return m.updateConfirm(msg)
 		}
@@ -196,16 +184,14 @@ func (m spawnModel) updatePickBranch(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 			m.branch = selected
 			m.baseBranch = ""
 			m.createBranch = false
-			m.step = stepAgentName
-			m.nameInput.Focus()
-			return m, textinput.Blink
+			m.step = stepConfirm
+			return m, nil
 		}
 		// New branch mode — this is the base branch
 		m.baseBranch = selected
 		m.createBranch = true
-		m.step = stepAgentName
-		m.nameInput.Focus()
-		return m, textinput.Blink
+		m.step = stepConfirm
+		return m, nil
 	default:
 		var cmd tea.Cmd
 		m.branchFilter, cmd = m.branchFilter.Update(msg)
@@ -242,31 +228,18 @@ func (m spawnModel) updateNewBranchName(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 	}
 }
 
-func (m spawnModel) updateAgentName(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
-		m.agentName = strings.TrimSpace(m.nameInput.Value())
-		m.step = stepConfirm
-		return m, nil
-	default:
-		var cmd tea.Cmd
-		m.nameInput, cmd = m.nameInput.Update(msg)
-		return m, cmd
-	}
-}
-
 func (m spawnModel) updateConfirm(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 	switch msg.String() {
 	case "y", "enter":
-		err := m.orch.SpawnAgent(m.agentName, m.branch, m.baseBranch, m.createBranch)
+		err := m.orch.SpawnAgent(m.branch, m.baseBranch, m.createBranch)
 		if err != nil {
 			m.err = err.Error()
 			return m, nil
 		}
 		return m, func() tea.Msg { return spawnDoneMsg{} }
 	case "n":
-		m.step = stepAgentName
-		m.nameInput.Focus()
+		m.step = stepPickBranch
+		m.branchFilter.Focus()
 		return m, textinput.Blink
 	}
 	return m, nil
@@ -376,19 +349,6 @@ func (m spawnModel) ViewContent() string {
 		b.WriteString("\n\n")
 		b.WriteString(m.styles.Help.Render("  enter: continue │ esc: back"))
 
-	case stepAgentName:
-		if m.createBranch {
-			b.WriteString(m.styles.WizardDim.Render(fmt.Sprintf("Branch: %s (new, from %s)", m.branch, m.baseBranch)))
-		} else {
-			b.WriteString(m.styles.WizardDim.Render(fmt.Sprintf("Branch: %s (existing)", m.branch)))
-		}
-		b.WriteString("\n")
-		b.WriteString(m.styles.WizardActive.Render("Agent name (optional)"))
-		b.WriteString("\n\n")
-		b.WriteString("  " + m.nameInput.View())
-		b.WriteString("\n\n")
-		b.WriteString(m.styles.Help.Render("  enter: continue │ esc: back"))
-
 	case stepConfirm:
 		b.WriteString(m.styles.WizardActive.Render("Confirm"))
 		b.WriteString("\n\n")
@@ -397,9 +357,6 @@ func (m spawnModel) ViewContent() string {
 			b.WriteString(fmt.Sprintf("  Base:      %s (will create)\n", m.baseBranch))
 		} else {
 			b.WriteString("  Base:      — (existing branch)\n")
-		}
-		if m.agentName != "" {
-			b.WriteString(fmt.Sprintf("  Name:      %s\n", m.agentName))
 		}
 		b.WriteString("\n")
 		b.WriteString(m.styles.Help.Render("  y/enter: spawn │ n: go back │ esc: back"))
