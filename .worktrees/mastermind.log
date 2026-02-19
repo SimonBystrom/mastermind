@@ -690,3 +690,11 @@ time=2026-02-19T14:11:09.480+09:00 level=DEBUG msg="agent status change (tmux)" 
 time=2026-02-19T14:11:23.538+09:00 level=INFO msg="agent idle with changes" id=a3
 time=2026-02-19T14:11:27.505+09:00 level=DEBUG msg="agent status change (tmux)" id=a3 status=running
 time=2026-02-19T14:15:23.478+09:00 level=DEBUG msg="agent status change (tmux)" id=a3 status=waiting waitingFor=permission
+time=2026-02-19T14:17:17.528+09:00 level=DEBUG msg="agent status change (tmux)" id=a2 status=running
+time=2026-02-19T14:17:21.540+09:00 level=INFO msg="agent idle without changes" id=a2
+time=2026-02-19T14:17:25.643+09:00 level=INFO msg="agent dismissed" id=a2 deleteBranch=false
+time=2026-02-19T14:17:29.483+09:00 level=DEBUG msg="agent status change (tmux)" id=a3 status=running
+time=2026-02-19T14:17:47.494+09:00 level=DEBUG msg="agent status change (tmux)" id=a3 status=waiting waitingFor=permission
+time=2026-02-19T14:18:23.478+09:00 level=DEBUG msg="agent status change (tmux)" id=a3 status=running
+time=2026-02-19T14:18:39.516+09:00 level=INFO msg="agent idle with changes" id=a3
+time=2026-02-19T14:29:21.575+09:00 level=INFO msg="agent cleaned up after merge" id=a3 removeWorktree=true deleteBranch=true
