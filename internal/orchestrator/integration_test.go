@@ -55,7 +55,7 @@ func TestFullLifecycle_SpawnAndDismiss(t *testing.T) {
 	)
 
 	// Spawn with new branch
-	err := o.SpawnAgent("integ-agent", "feat/integration", "HEAD", true)
+	err := o.SpawnAgent("feat/integration", "HEAD", true)
 	if err != nil {
 		t.Fatalf("SpawnAgent: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestFullLifecycle_SpawnMergeCycle(t *testing.T) {
 	defaultBranch, _ := git.CurrentBranch(repo)
 
 	// Spawn agent on new branch
-	err := o.SpawnAgent("merge-agent", "feat/merge-test", defaultBranch, true)
+	err := o.SpawnAgent("feat/merge-test", defaultBranch, true)
 	if err != nil {
 		t.Fatalf("SpawnAgent: %v", err)
 	}

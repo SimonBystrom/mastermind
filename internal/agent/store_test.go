@@ -7,7 +7,7 @@ import (
 
 func TestStore_AddAndGet(t *testing.T) {
 	s := NewStore()
-	a := NewAgent("test", "feat/x", "main", "/wt", "@1", "%0")
+	a := NewAgent("feat/x", "main", "/wt", "@1", "%0")
 	a.ID = "custom-id"
 
 	s.Add(a)
@@ -22,8 +22,8 @@ func TestStore_AddAndGet(t *testing.T) {
 
 func TestStore_Add_AutoID(t *testing.T) {
 	s := NewStore()
-	a1 := NewAgent("a1", "b1", "main", "/wt1", "@1", "%0")
-	a2 := NewAgent("a2", "b2", "main", "/wt2", "@2", "%1")
+	a1 := NewAgent("b1", "main", "/wt1", "@1", "%0")
+	a2 := NewAgent("b2", "main", "/wt2", "@2", "%1")
 
 	s.Add(a1)
 	s.Add(a2)
@@ -38,7 +38,7 @@ func TestStore_Add_AutoID(t *testing.T) {
 
 func TestStore_Add_PresetID(t *testing.T) {
 	s := NewStore()
-	a := NewAgent("test", "feat/x", "main", "/wt", "@1", "%0")
+	a := NewAgent("feat/x", "main", "/wt", "@1", "%0")
 	a.ID = "preset"
 
 	s.Add(a)
@@ -57,8 +57,8 @@ func TestStore_Get_NotFound(t *testing.T) {
 
 func TestStore_All(t *testing.T) {
 	s := NewStore()
-	a1 := NewAgent("a1", "b1", "main", "/wt1", "@1", "%0")
-	a2 := NewAgent("a2", "b2", "main", "/wt2", "@2", "%1")
+	a1 := NewAgent("b1", "main", "/wt1", "@1", "%0")
+	a2 := NewAgent("b2", "main", "/wt2", "@2", "%1")
 	s.Add(a1)
 	s.Add(a2)
 
@@ -78,7 +78,7 @@ func TestStore_All_Empty(t *testing.T) {
 
 func TestStore_UpdateStatus(t *testing.T) {
 	s := NewStore()
-	a := NewAgent("test", "feat/x", "main", "/wt", "@1", "%0")
+	a := NewAgent("feat/x", "main", "/wt", "@1", "%0")
 	s.Add(a)
 
 	ok := s.UpdateStatus(a.ID, StatusReviewReady)
@@ -100,7 +100,7 @@ func TestStore_UpdateStatus_NotFound(t *testing.T) {
 
 func TestStore_Remove(t *testing.T) {
 	s := NewStore()
-	a := NewAgent("test", "feat/x", "main", "/wt", "@1", "%0")
+	a := NewAgent("feat/x", "main", "/wt", "@1", "%0")
 	s.Add(a)
 
 	s.Remove(a.ID)
@@ -121,7 +121,7 @@ func TestStore_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			a := NewAgent("test", "b", "main", "/wt", "@1", "%0")
+			a := NewAgent("b", "main", "/wt", "@1", "%0")
 			s.Add(a)
 			s.Get(a.ID)
 			s.All()

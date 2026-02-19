@@ -11,7 +11,7 @@ func TestSaveAndLoadState(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
 
-	a := NewAgent("myagent", "feat/x", "main", "/tmp/wt", "@1", "%0")
+	a := NewAgent("feat/x", "main", "/tmp/wt", "@1", "%0")
 	a.ID = "a1"
 	a.SetStatus(StatusReviewReady)
 	a.SetWaitingFor("permission")
@@ -32,9 +32,6 @@ func TestSaveAndLoadState(t *testing.T) {
 	pa := loaded[0]
 	if pa.ID != "a1" {
 		t.Errorf("ID = %q, want %q", pa.ID, "a1")
-	}
-	if pa.Name != "myagent" {
-		t.Errorf("Name = %q, want %q", pa.Name, "myagent")
 	}
 	if pa.Branch != "feat/x" {
 		t.Errorf("Branch = %q, want %q", pa.Branch, "feat/x")
@@ -83,7 +80,6 @@ func TestSaveState_PreservesAllFields(t *testing.T) {
 
 	a := &Agent{
 		ID:           "a42",
-		Name:         "builder",
 		Branch:       "feat/build",
 		BaseBranch:   "develop",
 		WorktreePath: "/work/trees/feat-build",
@@ -113,9 +109,6 @@ func TestSaveState_PreservesAllFields(t *testing.T) {
 	pa := loaded[0]
 	if pa.ID != "a42" {
 		t.Errorf("ID = %q", pa.ID)
-	}
-	if pa.Name != "builder" {
-		t.Errorf("Name = %q", pa.Name)
 	}
 	if pa.Branch != "feat/build" {
 		t.Errorf("Branch = %q", pa.Branch)

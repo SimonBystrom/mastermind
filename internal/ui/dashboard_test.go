@@ -66,9 +66,9 @@ func TestSortedAgents_ByID(t *testing.T) {
 	d, store := newTestDashboard(t)
 	d.sortBy = sortByID
 
-	a1 := agent.NewAgent("first", "b1", "main", "/wt1", "@1", "%1")
+	a1 := agent.NewAgent("b1", "main", "/wt1", "@1", "%1")
 	a1.ID = "a1"
-	a2 := agent.NewAgent("second", "b2", "main", "/wt2", "@2", "%2")
+	a2 := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
 	a2.ID = "a2"
 	store.Add(a2) // add in reverse order
 	store.Add(a1)
@@ -86,11 +86,11 @@ func TestSortedAgents_ByStatus(t *testing.T) {
 	d, store := newTestDashboard(t)
 	d.sortBy = sortByStatus
 
-	running := agent.NewAgent("running", "b1", "main", "/wt1", "@1", "%1")
+	running := agent.NewAgent("b1", "main", "/wt1", "@1", "%1")
 	running.ID = "r1"
 	running.SetStatus(agent.StatusRunning)
 
-	waiting := agent.NewAgent("waiting", "b2", "main", "/wt2", "@2", "%2")
+	waiting := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
 	waiting.ID = "w1"
 	waiting.SetStatus(agent.StatusWaiting)
 
@@ -108,10 +108,10 @@ func TestSortedAgents_ByDuration(t *testing.T) {
 	d, store := newTestDashboard(t)
 	d.sortBy = sortByDuration
 
-	newer := agent.NewAgent("newer", "b1", "main", "/wt1", "@1", "%1")
+	newer := agent.NewAgent("b1", "main", "/wt1", "@1", "%1")
 	newer.ID = "n1"
 
-	older := agent.NewAgent("older", "b2", "main", "/wt2", "@2", "%2")
+	older := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
 	older.ID = "o1"
 	// Finish older agent with a known duration
 	older.SetFinished(0, older.StartedAt.Add(10*time.Minute))
@@ -138,11 +138,11 @@ func TestDashboard_ViewContent_NoAgents(t *testing.T) {
 func TestDashboard_ViewContent_WithAgents(t *testing.T) {
 	d, store := newTestDashboard(t)
 
-	a := agent.NewAgent("builder", "feat/build", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/build", "main", "/wt", "@1", "%1")
 	store.Add(a)
 
 	content := d.ViewContent()
-	if !strings.Contains(content, "builder") {
+	if !strings.Contains(content, "feat/build") {
 		t.Error("dashboard should show agent name")
 	}
 	if !strings.Contains(content, "feat/build") {
@@ -153,9 +153,9 @@ func TestDashboard_ViewContent_WithAgents(t *testing.T) {
 func TestDashboard_CursorNavigation(t *testing.T) {
 	d, store := newTestDashboard(t)
 
-	a1 := agent.NewAgent("a1", "b1", "main", "/wt1", "@1", "%1")
+	a1 := agent.NewAgent("b1", "main", "/wt1", "@1", "%1")
 	a1.ID = "a1"
-	a2 := agent.NewAgent("a2", "b2", "main", "/wt2", "@2", "%2")
+	a2 := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
 	a2.ID = "a2"
 	store.Add(a1)
 	store.Add(a2)
@@ -210,7 +210,7 @@ func TestDashboard_SortCycle(t *testing.T) {
 func TestDashboard_Notifications(t *testing.T) {
 	d, store := newTestDashboard(t)
 
-	a := agent.NewAgent("notifier", "feat/n", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/n", "main", "/wt", "@1", "%1")
 	store.Add(a)
 
 	d, _ = d.Update(orchestrator.AgentFinishedMsg{

@@ -125,7 +125,7 @@ func (o *Orchestrator) SetProgram(p *tea.Program) {
 	o.program = p
 }
 
-func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch bool) error {
+func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) error {
 	// Guard against worktree name collision
 	for _, existing := range o.store.All() {
 		if existing.Branch == branch {
@@ -160,12 +160,7 @@ func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch 
 		slog.Warn("failed to write hook files, falling back to tmux polling", "error", err)
 	}
 
-	windowName := name
-	if windowName == "" {
-		windowName = branch
-	}
-
-	paneID, err := o.tmux.NewWindow(o.session, windowName, wtPath, []string{"claude"})
+	paneID, err := o.tmux.NewWindow(o.session, branch, wtPath, []string{"claude"})
 	if err != nil {
 		o.git.RemoveWorktree(o.repoPath, wtPath)
 		return fmt.Errorf("create tmux window: %w", err)
@@ -173,10 +168,10 @@ func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch 
 
 	windowID, _ := o.tmux.WindowIDForPane(paneID)
 
-	a := agent.NewAgent(name, branch, baseBranch, wtPath, windowID, paneID)
+	a := agent.NewAgent(branch, baseBranch, wtPath, windowID, paneID)
 	o.store.Add(a)
 
-	slog.Info("agent spawned", "id", a.ID, "branch", branch, "name", name)
+	slog.Info("agent spawned", "id", a.ID, "branch", branch)
 	o.saveState()
 
 	return nil
@@ -626,10 +621,7 @@ func (o *Orchestrator) cleanupAfterMerge(a *agent.Agent) error {
 func (o *Orchestrator) CleanupDeadAgents() []CleanupResult {
 	var results []CleanupResult
 	for _, a := range o.store.All() {
-		name := a.Name
-		if name == "" {
-			name = a.ID
-		}
+		name := a.ID
 
 		var reason string
 		if !o.tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
@@ -884,7 +876,6 @@ func (o *Orchestrator) RecoverAgents() {
 
 		a := &agent.Agent{
 			ID:           pa.ID,
-			Name:         pa.Name,
 			Branch:       pa.Branch,
 			BaseBranch:   pa.BaseBranch,
 			WorktreePath: pa.WorktreePath,

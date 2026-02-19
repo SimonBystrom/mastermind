@@ -114,13 +114,9 @@ func TestSpawn_ViewContent_Confirm(t *testing.T) {
 	m.branch = "feat/test"
 	m.baseBranch = "main"
 	m.createBranch = true
-	m.agentName = "myagent"
 
 	content := m.ViewContent()
 	if !strings.Contains(content, "feat/test") {
 		t.Error("confirm should show branch")
-	}
-	if !strings.Contains(content, "myagent") {
-		t.Error("confirm should show agent name")
 	}
 }
