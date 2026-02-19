@@ -16,6 +16,7 @@ import (
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/git"
+	"github.com/simonbystrom/mastermind/internal/hook"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 )
 
@@ -153,6 +154,10 @@ func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch 
 	// Write Claude Code project settings with statusline config
 	if err := writeClaudeProjectSettings(wtPath); err != nil {
 		slog.Warn("failed to write claude project settings", "error", err)
+	}
+	// Write hook files so Claude Code reports status via hooks
+	if err := hook.WriteHookFiles(wtPath); err != nil {
+		slog.Warn("failed to write hook files, falling back to tmux polling", "error", err)
 	}
 
 	windowName := name
@@ -308,9 +313,20 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 
+			// Check if pane still exists (hooks can't detect this)
+			if !o.tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
+				slog.Debug("pane gone, marking dismissed", "id", a.ID, "pane", a.TmuxPaneID)
+				o.monitor.Remove(a.TmuxPaneID)
+				a.SetStatus(agent.StatusDismissed)
+				if o.program != nil {
+					o.program.Send(AgentGoneMsg{AgentID: a.ID})
+				}
+				continue
+			}
+
+			// Check for dead pane (hooks can't detect this either)
 			paneStatus, err := o.monitor.GetPaneStatus(a.TmuxPaneID)
 			if err != nil {
-				// Pane no longer exists — window was closed externally
 				slog.Debug("pane gone, marking dismissed", "id", a.ID, "pane", a.TmuxPaneID)
 				o.monitor.Remove(a.TmuxPaneID)
 				a.SetStatus(agent.StatusDismissed)
@@ -325,26 +341,26 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 
-			// No statuses are fully "settled" — the user can always send
-			// another prompt to any agent, so we always need to re-classify
-			// pane content to detect when an idle agent starts working again.
+			// Try hook-based status detection first
+			if o.handleHookStatus(a, status) {
+				continue
+			}
 
+			// Fall back to tmux content polling
 			if paneStatus.WaitingFor == "" {
 				// Claude is actively working
 				a.SetEverActive(true)
 				if status != agent.StatusRunning {
 					a.SetStatus(agent.StatusRunning)
 					a.SetWaitingFor("")
-					slog.Debug("agent status change", "id", a.ID, "status", "running")
+					slog.Debug("agent status change (tmux)", "id", a.ID, "status", "running")
 				}
 			} else if paneStatus.WaitingFor == "permission" {
-				// A permission pattern matched (e.g. "Chat about this",
-				// "Yes/No", "Allow/Deny") — agent needs user attention.
 				a.SetEverActive(true)
 				if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
 					a.SetStatus(agent.StatusWaiting)
 					a.SetWaitingFor("permission")
-					slog.Debug("agent status change", "id", a.ID, "status", "waiting", "waitingFor", "permission")
+					slog.Debug("agent status change (tmux)", "id", a.ID, "status", "waiting", "waitingFor", "permission")
 					if o.program != nil {
 						o.program.Send(AgentWaitingMsg{
 							AgentID:    a.ID,
@@ -353,8 +369,6 @@ func (o *Orchestrator) StartMonitor() {
 					}
 				}
 			} else if a.GetEverActive() {
-				// Pane is stable with no numbered list — determine status
-				// from git state (review ready if changes, done otherwise).
 				o.handleAgentIdle(a)
 			}
 		}
@@ -372,6 +386,65 @@ func (o *Orchestrator) StartMonitor() {
 
 		o.saveState()
 	}
+}
+
+// handleHookStatus reads the hook status file for the agent and updates
+// state accordingly. Returns true if hook status was available and handled,
+// false if we should fall back to tmux polling.
+func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) bool {
+	sf, err := hook.ReadStatus(a.WorktreePath)
+	if err != nil {
+		slog.Debug("hook status read error, falling back to tmux", "id", a.ID, "error", err)
+		return false
+	}
+	if sf == nil || sf.IsStale() {
+		return false
+	}
+
+	switch sf.Status {
+	case hook.StatusRunning:
+		a.SetEverActive(true)
+		if status != agent.StatusRunning {
+			a.SetStatus(agent.StatusRunning)
+			a.SetWaitingFor("")
+			slog.Debug("agent status change (hook)", "id", a.ID, "status", "running")
+		}
+
+	case hook.StatusWaitingPermission:
+		a.SetEverActive(true)
+		if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
+			a.SetStatus(agent.StatusWaiting)
+			a.SetWaitingFor("permission")
+			slog.Debug("agent status change (hook)", "id", a.ID, "status", "waiting", "waitingFor", "permission")
+			if o.program != nil {
+				o.program.Send(AgentWaitingMsg{
+					AgentID:    a.ID,
+					WaitingFor: "permission",
+				})
+			}
+		}
+
+	case hook.StatusWaitingInput:
+		a.SetEverActive(true)
+		if a.GetEverActive() {
+			o.handleAgentIdle(a)
+		}
+
+	case hook.StatusIdle:
+		if a.GetEverActive() {
+			o.handleAgentIdle(a)
+		}
+
+	case hook.StatusStopped:
+		if a.GetEverActive() {
+			o.handleAgentIdle(a)
+		}
+
+	default:
+		return false
+	}
+
+	return true
 }
 
 func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {

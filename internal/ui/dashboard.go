@@ -14,12 +14,21 @@ import (
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
-const logo = ` ███╗   ███╗ █████╗ ███████╗████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗██████╗
+const logoFull = ` ███╗   ███╗ █████╗ ███████╗████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗██████╗
  ████╗ ████║██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗
  ██╔████╔██║███████║███████╗   ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║██║  ██║
  ██║╚██╔╝██║██╔══██║╚════██║   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██║  ██║
  ██║ ╚═╝ ██║██║  ██║███████║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██████╔╝
  ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝`
+
+const logoCompact = ` ███╗   ███╗ █████╗ ███████╗████████╗███████╗██████╗
+ ████╗ ████║██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗
+ ██╔████╔██║███████║███████╗   ██║   █████╗  ██████╔╝
+ ██║╚██╔╝██║██╔══██║╚════██║   ██║   ██╔══╝  ██╔══██╗
+ ██║ ╚═╝ ██║██║  ██║███████║   ██║   ███████╗██║  ██║
+ ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝`
+
+const logoTiny = ` MASTERMIND`
 
 type sortMode int
 
@@ -444,11 +453,33 @@ func (m dashboardModel) sortLabel() string {
 	}
 }
 
+// contentWidth returns the usable content width inside the border.
+func (m dashboardModel) contentWidth() int {
+	// Border has 2 horizontal padding + 2 border chars = 4 total overhead,
+	// plus we subtract 4 more from terminal width (see View).
+	w := m.width - 8
+	if w < 20 {
+		w = 20
+	}
+	return w
+}
+
 func (m dashboardModel) ViewContent() string {
 	var b strings.Builder
 
-	// Logo
-	b.WriteString(m.styles.Logo.Render(logo))
+	cw := m.contentWidth()
+
+	// Logo — pick variant that fits
+	var chosenLogo string
+	switch {
+	case cw >= 82:
+		chosenLogo = logoFull
+	case cw >= 52:
+		chosenLogo = logoCompact
+	default:
+		chosenLogo = logoTiny
+	}
+	b.WriteString(m.styles.Logo.Render(chosenLogo))
 	b.WriteString("\n\n")
 
 	// Title
@@ -473,14 +504,30 @@ func (m dashboardModel) ViewContent() string {
 	}
 	b.WriteString("\n")
 
-	// Agent table
+	// Agent table — compute column widths dynamically.
+	// Fixed columns: indent(2) + ID(4) + gaps(7×1) + Status(12) + Duration(10) + Cost(8) + Ctx%(6) + Lines(10) + indicator(2) = 61
+	const fixedCols = 61
+	flexSpace := cw - fixedCols
+	if flexSpace < 10 {
+		flexSpace = 10
+	}
+	// Split remaining space between Name and Branch (roughly 40/60)
+	nameCol := flexSpace * 40 / 100
+	if nameCol < 5 {
+		nameCol = 5
+	}
+	branchCol := flexSpace - nameCol
+	if branchCol < 5 {
+		branchCol = 5
+	}
+
 	agents := m.sortedAgents()
 	if len(agents) == 0 {
 		b.WriteString(m.styles.WizardDim.Render("  No agents running. Press n to spawn one."))
 		b.WriteString("\n")
 	} else {
 		// Header
-		header := fmt.Sprintf("  %-4s %-18s %-22s %-12s %-10s %-8s %-6s %-10s", "ID", "Name", "Branch", "Status", "Duration", "Cost", "Ctx%", "Lines")
+		header := fmt.Sprintf("  %-4s %-*s %-*s %-12s %-10s %-8s %-6s %-10s", "ID", nameCol, "Name", branchCol, "Branch", "Status", "Duration", "Cost", "Ctx%", "Lines")
 		b.WriteString(m.styles.Header.Render(header))
 		b.WriteString("\n")
 
@@ -570,10 +617,10 @@ func (m dashboardModel) ViewContent() string {
 			}
 
 			// Build the row content
-			row := fmt.Sprintf("  %-4s %-18s %-22s %s%-10s %-8s %s%-10s%s",
+			row := fmt.Sprintf("  %-4s %-*s %-*s %s%-10s %-8s %s%-10s%s",
 				a.ID,
-				truncate(name, 18),
-				truncate(a.Branch, 22),
+				nameCol, truncate(name, nameCol),
+				branchCol, truncate(a.Branch, branchCol),
 				styledStatus,
 				dur,
 				costStr,
@@ -612,9 +659,13 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	}
 
-	// Help
+	// Help — use two lines when narrow
 	b.WriteString("\n")
-	b.WriteString(m.styles.Help.Render(fmt.Sprintf("  n: new agent │ enter: focus/review │ p: preview │ m: merge │ d: dismiss │ D: dismiss+delete │ s: sort (%s) │ q: quit", m.sortLabel())))
+	helpLine := fmt.Sprintf("  n: new │ enter: focus │ p: preview │ m: merge │ d: dismiss │ D: dismiss+del │ s: sort (%s) │ q: quit", m.sortLabel())
+	if cw < 80 {
+		helpLine = fmt.Sprintf("  n: new │ enter: focus │ p: preview │ m: merge\n  d: dismiss │ D: del │ s: sort (%s) │ q: quit", m.sortLabel())
+	}
+	b.WriteString(m.styles.Help.Render(helpLine))
 
 	return b.String()
 }
@@ -623,8 +674,8 @@ func (m dashboardModel) View() string {
 	content := m.ViewContent()
 
 	maxWidth := m.width - 4
-	if maxWidth < 40 {
-		maxWidth = 80
+	if maxWidth < 20 {
+		maxWidth = 20
 	}
 
 	return m.styles.Border.Width(maxWidth).Render(content)
