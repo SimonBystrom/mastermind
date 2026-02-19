@@ -480,7 +480,7 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	} else {
 		// Header
-		header := fmt.Sprintf("  %-4s %-18s %-22s %-12s %-10s", "ID", "Name", "Branch", "Status", "Duration")
+		header := fmt.Sprintf("  %-4s %-18s %-22s %-12s %-10s %-8s %-6s %-10s", "ID", "Name", "Branch", "Status", "Duration", "Cost", "Ctx%", "Lines")
 		b.WriteString(m.styles.Header.Render(header))
 		b.WriteString("\n")
 
@@ -549,13 +549,36 @@ func (m dashboardModel) ViewContent() string {
 				styledStatus += strings.Repeat(" ", 12-w)
 			}
 
+			// Statusline data columns
+			costStr := "-"
+			ctxStr := "-"
+			linesStr := "-"
+			if sd := a.GetStatuslineData(); sd != nil {
+				costStr = fmt.Sprintf("$%.2f", sd.CostUSD)
+				ctxPct := int(sd.ContextPct)
+				if ctxPct > 80 {
+					ctxStr = m.styles.Attention.Render(fmt.Sprintf("%d%%", ctxPct))
+				} else {
+					ctxStr = fmt.Sprintf("%d%%", ctxPct)
+				}
+				linesStr = fmt.Sprintf("+%d -%d", sd.LinesAdded, sd.LinesRemoved)
+			}
+
+			// Pad ctxStr to 6 visual characters (may contain ANSI codes)
+			if w := lipgloss.Width(ctxStr); w < 6 {
+				ctxStr += strings.Repeat(" ", 6-w)
+			}
+
 			// Build the row content
-			row := fmt.Sprintf("  %-4s %-18s %-22s %s%-10s%s",
+			row := fmt.Sprintf("  %-4s %-18s %-22s %s%-10s %-8s %s%-10s%s",
 				a.ID,
 				truncate(name, 18),
 				truncate(a.Branch, 22),
 				styledStatus,
 				dur,
+				costStr,
+				ctxStr,
+				linesStr,
 				indicator,
 			)
 

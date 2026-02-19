@@ -94,6 +94,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "warning: could not write default config: %v\n", err)
 	}
 
+	// Install the statusline script for Claude Code integration
+	if err := config.WriteStatuslineScript(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not write statusline script: %v\n", err)
+	}
+
 	worktreeDir := filepath.Join(absRepo, ".worktrees")
 	if err := os.MkdirAll(worktreeDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "error creating worktree directory: %v\n", err)
@@ -147,7 +152,7 @@ func main() {
 }
 
 func validateDependencies() error {
-	deps := []string{"tmux", "git", "claude", "lazygit"}
+	deps := []string{"tmux", "git", "claude", "lazygit", "jq"}
 	for _, dep := range deps {
 		if _, err := exec.LookPath(dep); err != nil {
 			return fmt.Errorf("%s not found on PATH", dep)

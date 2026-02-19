@@ -43,6 +43,9 @@ type Agent struct {
 	// Merge cleanup preferences (set by merge wizard, read after conflict resolution)
 	mergeDeleteBranch   bool
 	mergeRemoveWorktree bool
+
+	// Claude Code statusline data (read from sidecar file)
+	statuslineData *StatuslineData
 }
 
 func NewAgent(name, branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
@@ -159,6 +162,18 @@ func (a *Agent) SetMergeRemoveWorktree(v bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.mergeRemoveWorktree = v
+}
+
+func (a *Agent) GetStatuslineData() *StatuslineData {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.statuslineData
+}
+
+func (a *Agent) SetStatuslineData(sd *StatuslineData) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.statuslineData = sd
 }
 
 func (a *Agent) Duration() time.Duration {

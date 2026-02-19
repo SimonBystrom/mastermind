@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
+	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/git"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 )
@@ -146,6 +148,11 @@ func (o *Orchestrator) SpawnAgent(name, branch, baseBranch string, createBranch 
 	wtPath, err := o.git.CreateWorktree(o.repoPath, o.worktreeDir, branch)
 	if err != nil {
 		return fmt.Errorf("create worktree: %w", err)
+	}
+
+	// Write Claude Code project settings with statusline config
+	if err := writeClaudeProjectSettings(wtPath); err != nil {
+		slog.Warn("failed to write claude project settings", "error", err)
 	}
 
 	windowName := name
@@ -351,6 +358,18 @@ func (o *Orchestrator) StartMonitor() {
 				o.handleAgentIdle(a)
 			}
 		}
+		// Read statusline sidecar files for active agents
+		for _, a := range agents {
+			status := a.GetStatus()
+			if status == agent.StatusDismissed {
+				continue
+			}
+			sd, err := agent.ReadStatuslineFile(a.WorktreePath)
+			if err == nil {
+				a.SetStatuslineData(sd)
+			}
+		}
+
 		o.saveState()
 	}
 }
@@ -836,4 +855,76 @@ func (o *Orchestrator) saveState() {
 	if err := agent.SaveState(o.statePath, agents); err != nil {
 		slog.Error("failed to save state", "error", err)
 	}
+}
+
+// writeClaudeProjectSettings writes .claude/settings.json in the worktree
+// to configure Claude Code's statusline for this agent. It also ensures the
+// .claude/ directory and .claude-status.json sidecar are git-ignored.
+func writeClaudeProjectSettings(wtPath string) error {
+	dir := filepath.Join(wtPath, ".claude")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	// Gitignore the .claude directory contents so they don't appear as uncommitted changes
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*\n"), 0o644); err != nil {
+		return err
+	}
+
+	// Also gitignore the sidecar file at the worktree root
+	statusIgnorePath := filepath.Join(wtPath, ".claude-status.json")
+	_ = appendGitExclude(wtPath, ".claude-status.json", statusIgnorePath)
+
+	settings := map[string]interface{}{
+		"statusLine": map[string]string{
+			"type":    "command",
+			"command": config.StatuslineScriptPath(),
+		},
+	}
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(dir, "settings.json"), data, 0o644)
+}
+
+// appendGitExclude adds a pattern to .git/info/exclude for the given worktree
+// if it's not already present.
+func appendGitExclude(wtPath, pattern, _ string) error {
+	// For worktrees, the git dir is found via `git rev-parse --git-dir`
+	out, err := exec.Command("git", "-C", wtPath, "rev-parse", "--git-dir").Output()
+	if err != nil {
+		return err
+	}
+	gitDir := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(wtPath, gitDir)
+	}
+
+	excludePath := filepath.Join(gitDir, "info", "exclude")
+	if err := os.MkdirAll(filepath.Dir(excludePath), 0o755); err != nil {
+		return err
+	}
+
+	content, _ := os.ReadFile(excludePath)
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.TrimSpace(line) == pattern {
+			return nil
+		}
+	}
+
+	f, err := os.OpenFile(excludePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	prefix := ""
+	if len(content) > 0 && content[len(content)-1] != '\n' {
+		prefix = "\n"
+	}
+	_, err = fmt.Fprintf(f, "%s%s\n", prefix, pattern)
+	return err
 }
