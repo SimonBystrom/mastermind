@@ -69,11 +69,7 @@ func (m dashboardModel) Init() tea.Cmd {
 func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case orchestrator.AgentFinishedMsg:
-		a, ok := m.store.Get(msg.AgentID)
 		name := msg.AgentID
-		if ok && a.Name != "" {
-			name = a.Name
-		}
 		var text string
 		var style lipgloss.Style
 		if msg.HasChanges {
@@ -94,11 +90,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		return m, nil
 
 	case orchestrator.AgentGoneMsg:
-		a, ok := m.store.Get(msg.AgentID)
 		name := msg.AgentID
-		if ok && a.Name != "" {
-			name = a.Name
-		}
 		m.store.Remove(msg.AgentID)
 		m.notifications = append(m.notifications, notification{
 			text:  fmt.Sprintf("Agent %s window closed", name),
@@ -115,11 +107,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		return m, nil
 
 	case orchestrator.AgentReviewedMsg:
-		a, ok := m.store.Get(msg.AgentID)
 		name := msg.AgentID
-		if ok && a.Name != "" {
-			name = a.Name
-		}
 		var text string
 		var style lipgloss.Style
 		if msg.NewCommits {
@@ -140,11 +128,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		return m, nil
 
 	case orchestrator.MergeResultMsg:
-		a, ok := m.store.Get(msg.AgentID)
 		name := msg.AgentID
-		if ok && a.Name != "" {
-			name = a.Name
-		}
 		var text string
 		var style lipgloss.Style
 		if msg.Success {
@@ -172,11 +156,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		return m, nil
 
 	case orchestrator.PreviewStartedMsg:
-		a, ok := m.store.Get(msg.AgentID)
 		name := msg.AgentID
-		if ok && a.Name != "" {
-			name = a.Name
-		}
 		m.notifications = append(m.notifications, notification{
 			text:  fmt.Sprintf("Preview started for agent %s", name),
 			time:  time.Now(),
@@ -188,11 +168,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		return m, nil
 
 	case orchestrator.PreviewStoppedMsg:
-		a, ok := m.store.Get(msg.AgentID)
 		name := msg.AgentID
-		if ok && a.Name != "" {
-			name = a.Name
-		}
 		m.notifications = append(m.notifications, notification{
 			text:  fmt.Sprintf("Preview stopped for agent %s", name),
 			time:  time.Now(),
@@ -208,11 +184,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		return m, nil
 
 	case orchestrator.AgentWaitingMsg:
-		a, ok := m.store.Get(msg.AgentID)
 		name := msg.AgentID
-		if ok && a.Name != "" {
-			name = a.Name
-		}
 		var text string
 		var style lipgloss.Style
 		if msg.WaitingFor == "permission" {
@@ -284,10 +256,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 				a := agents[m.cursor]
 				status := a.GetStatus()
 				if status == agent.StatusReviewed || status == agent.StatusReviewReady {
-					name := a.Name
-					if name == "" {
-						name = a.ID
-					}
+					name := a.ID
 					return m, func() tea.Msg {
 						return startMergeMsg{
 							agentID:    a.ID,
@@ -301,10 +270,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "d":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				name := a.Name
-				if name == "" {
-					name = a.ID
-				}
+				name := a.ID
 				return m, func() tea.Msg {
 					return startDismissMsg{
 						agentID:      a.ID,
@@ -354,12 +320,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 						return nil
 					}
 				} else if previewID != "" {
-					previewAgent, ok := m.store.Get(previewID)
-					previewName := previewID
-					if ok && previewAgent.Name != "" {
-						previewName = previewAgent.Name
-					}
-					m.err = fmt.Sprintf("preview already active for agent %s — press p on that agent to stop it first", previewName)
+					m.err = fmt.Sprintf("preview already active for agent %s — press p on that agent to stop it first", previewID)
 				} else {
 					return m, func() tea.Msg {
 						if err := m.orch.PreviewAgent(a.ID); err != nil {
@@ -372,10 +333,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "D":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				name := a.Name
-				if name == "" {
-					name = a.ID
-				}
+				name := a.ID
 				return m, func() tea.Msg {
 					return startDismissMsg{
 						agentID:      a.ID,
@@ -468,9 +426,6 @@ func (m dashboardModel) ViewContent() string {
 		previewName := previewID
 		previewBranch := ""
 		if ok {
-			if previewAgent.Name != "" {
-				previewName = previewAgent.Name
-			}
 			previewBranch = previewAgent.Branch
 		}
 		banner := fmt.Sprintf("  PREVIEW ACTIVE: %s (branch %s) — p to stop", previewName, previewBranch)
@@ -486,12 +441,12 @@ func (m dashboardModel) ViewContent() string {
 	if flexSpace < 10 {
 		flexSpace = 10
 	}
-	// Split remaining space between Name and Branch (roughly 40/60)
-	nameCol := flexSpace * 40 / 100
-	if nameCol < 5 {
-		nameCol = 5
+	// Split remaining space between Model and Branch (roughly 30/70)
+	modelCol := flexSpace * 30 / 100
+	if modelCol < 5 {
+		modelCol = 5
 	}
-	branchCol := flexSpace - nameCol
+	branchCol := flexSpace - modelCol
 	if branchCol < 5 {
 		branchCol = 5
 	}
@@ -502,16 +457,11 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	} else {
 		// Header
-		header := fmt.Sprintf("  %-4s %-*s %-*s %-12s %-10s %-8s %-6s %-10s", "ID", nameCol, "Name", branchCol, "Branch", "Status", "Duration", "Cost", "Ctx%", "Lines")
+		header := fmt.Sprintf("  %-4s %-*s %-*s %-12s %-10s %-8s %-6s %-10s", "ID", modelCol, "Model", branchCol, "Branch", "Status", "Duration", "Cost", "Ctx%", "Lines")
 		b.WriteString(m.styles.Header.Render(header))
 		b.WriteString("\n")
 
 		for i, a := range agents {
-			name := a.Name
-			if name == "" {
-				name = "-"
-			}
-
 			status := a.GetStatus()
 			waitingFor := a.GetWaitingFor()
 
@@ -543,7 +493,7 @@ func (m dashboardModel) ViewContent() string {
 				styledStatus = string(status)
 			}
 
-			dur := formatDuration(a.Duration())
+			dur := formatDuration(a.Duration()) // fallback
 
 			indicator := "  "
 			switch status {
@@ -572,10 +522,17 @@ func (m dashboardModel) ViewContent() string {
 			}
 
 			// Statusline data columns
+			modelStr := "-"
 			costStr := "-"
 			ctxStr := "-"
 			linesStr := "-"
 			if sd := a.GetStatuslineData(); sd != nil {
+				if sd.Model != "" {
+					modelStr = sd.Model
+				}
+				if sd.DurationMs > 0 {
+					dur = formatDuration(time.Duration(sd.DurationMs) * time.Millisecond)
+				}
 				costStr = fmt.Sprintf("$%.2f", sd.CostUSD)
 				ctxPct := int(sd.ContextPct)
 				if ctxPct > 80 {
@@ -594,7 +551,7 @@ func (m dashboardModel) ViewContent() string {
 			// Build the row content
 			row := fmt.Sprintf("  %-4s %-*s %-*s %s%-10s %-8s %s%-10s%s",
 				a.ID,
-				nameCol, truncate(name, nameCol),
+				modelCol, truncate(modelStr, modelCol),
 				branchCol, truncate(a.Branch, branchCol),
 				styledStatus,
 				dur,

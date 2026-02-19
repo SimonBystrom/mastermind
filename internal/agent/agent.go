@@ -22,7 +22,6 @@ const (
 type Agent struct {
 	// Immutable fields (safe to read without lock)
 	ID           string
-	Name         string
 	Branch       string
 	BaseBranch   string
 	WorktreePath string
@@ -48,9 +47,8 @@ type Agent struct {
 	statuslineData *StatuslineData
 }
 
-func NewAgent(name, branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
+func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
 	return &Agent{
-		Name:         name,
 		Branch:       branch,
 		BaseBranch:   baseBranch,
 		WorktreePath: worktreePath,

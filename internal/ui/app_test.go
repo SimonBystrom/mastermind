@@ -63,7 +63,7 @@ func TestAppModel_ForwardsAgentMessages(t *testing.T) {
 	m := newTestApp(t)
 
 	// Add an agent to the store
-	a := agent.NewAgent("test", "feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
 	m.store.Add(a)
 
 	// Send AgentFinishedMsg
