@@ -234,16 +234,36 @@ func (m AppModel) View() string {
 	}
 }
 
+// minSideBySideWidth is the minimum terminal width needed to show
+// dashboard and sidebar side-by-side. Below this, panels stack vertically.
+const minSideBySideWidth = 100
+
 func (m AppModel) viewSideBySide(rightPanel string) string {
 	maxWidth := m.width - 4
-	if maxWidth < 40 {
-		maxWidth = 80
+	if maxWidth < 20 {
+		maxWidth = 20
 	}
 
+	// Narrow terminal: stack panels vertically
+	if m.width < minSideBySideWidth {
+		// Dashboard gets the full width in stacked mode
+		dash := m.dashboard
+		dash.width = maxWidth + 8 // contentWidth() subtracts 8 for border+padding
+		dashContent := lipgloss.NewStyle().Width(maxWidth).Render(dash.ViewContent())
+		sep := m.styles.Separator.Render(strings.Repeat("─", maxWidth))
+		panelContent := lipgloss.NewStyle().Width(maxWidth).Render(rightPanel)
+		joined := lipgloss.JoinVertical(lipgloss.Left, dashContent, sep, panelContent)
+		return m.styles.Border.Width(maxWidth).Render(joined)
+	}
+
+	// Wide terminal: side-by-side
 	dashWidth := maxWidth * m.layout.DashboardWidth / 100
 	panelWidth := maxWidth - dashWidth - 1
 
-	dashContent := lipgloss.NewStyle().Width(dashWidth).Render(m.dashboard.ViewContent())
+	// Give dashboard the constrained width so logo/columns adapt
+	dash := m.dashboard
+	dash.width = dashWidth + 8 // contentWidth() subtracts 8 for border+padding
+	dashContent := lipgloss.NewStyle().Width(dashWidth).Render(dash.ViewContent())
 	panelContent := lipgloss.NewStyle().Width(panelWidth).Render(rightPanel)
 
 	// Build a vertical separator matching the height of the taller panel
