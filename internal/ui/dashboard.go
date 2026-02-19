@@ -14,22 +14,6 @@ import (
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
-const logoFull = ` ███╗   ███╗ █████╗ ███████╗████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗██████╗
- ████╗ ████║██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗
- ██╔████╔██║███████║███████╗   ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║██║  ██║
- ██║╚██╔╝██║██╔══██║╚════██║   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██║  ██║
- ██║ ╚═╝ ██║██║  ██║███████║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██████╔╝
- ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝`
-
-const logoCompact = ` ███╗   ███╗ █████╗ ███████╗████████╗███████╗██████╗
- ████╗ ████║██╔══██╗██╔════╝╚══██╔══╝██╔════╝██╔══██╗
- ██╔████╔██║███████║███████╗   ██║   █████╗  ██████╔╝
- ██║╚██╔╝██║██╔══██║╚════██║   ██║   ██╔══╝  ██╔══██╗
- ██║ ╚═╝ ██║██║  ██║███████║   ██║   ███████╗██║  ██║
- ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝`
-
-const logoTiny = ` MASTERMIND`
-
 type sortMode int
 
 const (
@@ -469,16 +453,7 @@ func (m dashboardModel) ViewContent() string {
 
 	cw := m.contentWidth()
 
-	// Logo — pick variant that fits
-	var chosenLogo string
-	switch {
-	case cw >= 82:
-		chosenLogo = logoFull
-	case cw >= 52:
-		chosenLogo = logoCompact
-	default:
-		chosenLogo = logoTiny
-	}
+	chosenLogo := renderLogo(cw)
 	b.WriteString(m.styles.Logo.Render(chosenLogo))
 	b.WriteString("\n\n")
 
