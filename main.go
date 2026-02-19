@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -135,11 +137,26 @@ func main() {
 	// Recover agents from previous session
 	orch.RecoverAgents()
 
+	// Clean up any stale preview left over from a previous session that
+	// exited abnormally (e.g. SIGKILL, crash, tmux pane closed).
+	orch.CleanupPreview()
+	orch.ResetPreviewCleanup()
+
 	model := ui.NewApp(cfg, orch, store, absRepo, *session)
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithReportFocus())
 
 	orch.SetProgram(p)
 	go orch.StartMonitor()
+
+	// Handle SIGTERM/SIGHUP so preview cleanup runs even when the
+	// process is killed outside of the TUI (e.g. tmux session closed).
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGHUP)
+	go func() {
+		<-sigCh
+		orch.CleanupPreview()
+		p.Kill()
+	}()
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

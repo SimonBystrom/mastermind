@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -77,6 +78,8 @@ type Orchestrator struct {
 	previewAgentID    string // ID of agent being previewed (empty = no preview)
 	previewPrevBranch string // branch the main worktree was on before preview
 	previewPrevStatus agent.Status // agent's status before preview started
+
+	previewCleanupOnce sync.Once // ensures shutdown cleanup runs exactly once
 }
 
 // Option configures an Orchestrator.
@@ -808,8 +811,22 @@ func (o *Orchestrator) StopPreview() error {
 }
 
 // CleanupPreview stops any active preview, restoring the main worktree.
-// Called on shutdown to ensure no orphaned preview branches.
+// It is safe to call multiple times — the first call performs the cleanup
+// and subsequent calls are no-ops. This allows it to be called from both
+// normal shutdown and signal handlers without racing.
 func (o *Orchestrator) CleanupPreview() {
+	o.previewCleanupOnce.Do(func() {
+		o.doCleanupPreview()
+	})
+}
+
+// ResetPreviewCleanup resets the once guard so CleanupPreview can fire
+// again. Call this after startup cleanup so the shutdown path still works.
+func (o *Orchestrator) ResetPreviewCleanup() {
+	o.previewCleanupOnce = sync.Once{}
+}
+
+func (o *Orchestrator) doCleanupPreview() {
 	// Try to restore from persisted state if not already loaded
 	if o.previewAgentID == "" {
 		if ps := o.loadPreviewState(); ps != nil {
@@ -848,7 +865,8 @@ func (o *Orchestrator) CleanupPreview() {
 	o.previewPrevBranch = ""
 	o.previewPrevStatus = ""
 	o.deletePreviewState()
-	slog.Info("preview cleaned up on shutdown")
+	o.saveState()
+	slog.Info("preview cleaned up")
 }
 
 // RecoverAgents restores agents from persisted state, validating that

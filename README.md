@@ -52,6 +52,7 @@ make install
 | **git** | `brew install git` (or via Xcode CLT) |
 | **claude** | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) |
 | **lazygit** | `brew install lazygit` |
+| **jq** | `brew install jq` |
 
 ## Usage
 
@@ -97,6 +98,7 @@ The config uses TOML format:
 # conflicts      = "#f38ba8"  # Red
 # notification   = "#a6adc8"  # Subtext 0
 # help           = "#7f849c"  # Overlay 1
+# help_active    = "#bac2de"  # Subtext 1
 # border         = "#585b70"  # Surface 2
 # separator      = "#585b70"  # Surface 2
 # wizard_title   = "#cba6f7"  # Mauve
@@ -116,7 +118,9 @@ The config uses TOML format:
 ## Features
 
 - **Parallel agents** — run multiple Claude Code instances simultaneously, each isolated in its own git worktree and branch
-- **Real-time status monitoring** — polls tmux pane content every 2s with SHA256 stable-content hashing to detect agent state (running, waiting for permission/input, needs attention, review-ready, done)
+- **Hybrid status monitoring** — uses Claude Code hooks for instant status updates, with tmux pane polling as a fallback. Hook events fire on tool use, permission prompts, input prompts, and session stop/end. If hook data is stale (>30s), falls back to polling pane content every 2s with SHA256 stable-content hashing
+- **Statusline integration** — captures Claude Code's statusline JSON output per agent, showing model name, cost ($USD), context window usage (%), and lines added/removed directly in the dashboard
+- **Branch preview** — preview an agent's uncommitted changes against its base branch without leaving the dashboard. Opens a temporary diff view in lazygit; the preview is cleaned up automatically on exit
 - **Spawn wizard** — multi-step wizard to select a base branch, create or pick a branch, and name the agent, rendered side-by-side with the dashboard
 - **LazyGit integration** — opens lazygit in a split pane for reviewing uncommitted changes, tracks commits made during review
 - **Merge workflow** — merge agent branches back into their base branch with fast-forward or full merge, including conflict detection and resolution via lazygit
@@ -125,6 +129,7 @@ The config uses TOML format:
 - **Persistence** — agent state is saved to `.worktrees/mastermind-state.json` so agents survive a mastermind restart (recovered if their tmux windows still exist)
 - **Dead agent cleanup** — detect and clean up agents whose tmux windows or worktrees have disappeared, or whose branches have already been merged
 - **System monitor** — automatically opens btop (or top) in a split pane for system resource monitoring
+- **Fully configurable** — TOML config with 24 customizable color slots (defaults to Catppuccin Mocha) and layout sizing options
 
 ## Keybindings
 
@@ -132,6 +137,7 @@ The config uses TOML format:
 |---|---|
 | `n` | Open spawn wizard to create a new agent |
 | `enter` | Focus agent window / open lazygit for review-ready, reviewed, or conflicting agents |
+| `p` | Preview agent's changes against base branch (toggle on/off) |
 | `m` | Merge agent branch into base branch (review-ready or reviewed, with confirmation) |
 | `d` | Dismiss finished agent (keep branch) |
 | `D` | Dismiss finished agent + delete branch (with confirmation) |
@@ -146,8 +152,8 @@ The config uses TOML format:
 running → waiting (permission/input)
     ↓
 review ready → reviewing (lazygit open) → reviewed (commits made)
-    ↓                                          ↓
-   done                                    merge → conflicts → resolve → done
+    ↓               ↓                          ↓
+   done        previewing                  merge → conflicts → resolve → done
                                              ↓
                                             done
 ```
@@ -159,19 +165,20 @@ review ready → reviewing (lazygit open) → reviewed (commits made)
 | **attention?** | Agent may need attention (stable but unrecognized state) |
 | **review ready** | Agent finished with uncommitted changes |
 | **reviewing** | LazyGit is open for review |
+| **previewing** | Branch diff preview is active against base branch |
 | **reviewed** | Review completed, new commits were made |
 | **conflicts** | Merge conflicts detected, needs resolution |
 | **done** | Agent finished with no pending changes |
 
 ## How It Works
 
-1. **Spawn** — the spawn wizard walks you through picking a base branch, creating a new branch (or selecting an existing one), and optionally naming the agent. A git worktree is created and Claude Code is launched in a new tmux window.
-2. **Monitor** — pane content is polled every 2s. SHA256 content hashing detects when output stabilizes (~4s). Pattern matching classifies the stable state: active work (running spinners), permission prompts, input prompts, or idle.
-3. **Review** — when an agent finishes with uncommitted changes, its status becomes "review ready". Pressing `enter` opens lazygit in a split pane. Mastermind tracks the pre-review commit hash and detects whether new commits were made during review.
+1. **Spawn** — the spawn wizard walks you through picking a base branch, creating a new branch (or selecting an existing one), and optionally naming the agent. A git worktree is created and Claude Code is launched in a new tmux window. Mastermind automatically writes Claude Code hook files (`.claude/settings.local.json` and `.claude/hooks/mastermind-status.sh`) into each worktree so agents report their status via lifecycle hooks.
+2. **Monitor** — a hybrid approach is used for status detection. Claude Code hooks fire on tool use, permission/input prompts, and session events, writing a `.mastermind-status` JSON file with the current state and timestamp. If hook data is stale (>30s), mastermind falls back to polling tmux pane content every 2s with SHA256 content hashing and pattern matching.
+3. **Review** — when an agent finishes with uncommitted changes, its status becomes "review ready". Pressing `enter` opens lazygit in a split pane. Mastermind tracks the pre-review commit hash and detects whether new commits were made during review. You can also press `p` to preview changes against the base branch without entering a full review.
 4. **Merge** — after review, press `m` to merge the agent branch into its base. Fast-forward is used when possible. If merge conflicts occur, lazygit reopens for manual resolution; mastermind monitors and completes the merge once conflicts are resolved.
 5. **Dismiss** — tears down the tmux window, removes the worktree, optionally deletes the branch.
 
-Agent state is persisted to `.worktrees/mastermind-state.json` and agents are recovered on restart. Logs are written to `.worktrees/mastermind.log`.
+Agent state is persisted to `.worktrees/mastermind-state.json` and agents are recovered on restart. Logs are written to `.worktrees/mastermind.log`. Claude Code's statusline output is captured to `.claude-status.json` per worktree, providing live cost, model, and context usage data in the dashboard.
 
 ## Uninstall
 
