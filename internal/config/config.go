@@ -24,6 +24,7 @@ type Colors struct {
 	Conflicts     string `toml:"conflicts"`
 	Notification  string `toml:"notification"`
 	Help          string `toml:"help"`
+	HelpActive    string `toml:"help_active"`
 	Border        string `toml:"border"`
 	Separator     string `toml:"separator"`
 	WizardTitle   string `toml:"wizard_title"`
@@ -66,6 +67,7 @@ func Default() Config {
 			Conflicts:     "#f38ba8", // Red
 			Notification:  "#a6adc8", // Subtext 0
 			Help:          "#7f849c", // Overlay 1
+			HelpActive:    "#bac2de", // Subtext 1
 			Border:        "#585b70", // Surface 2
 			Separator:     "#585b70", // Surface 2
 			WizardTitle:   "#cba6f7", // Mauve
@@ -135,6 +137,7 @@ const defaultFileContent = `# Mastermind configuration
 # conflicts      = "#f38ba8"  # Red
 # notification   = "#a6adc8"  # Subtext 0
 # help           = "#7f849c"  # Overlay 1
+# help_active    = "#bac2de"  # Subtext 1
 # border         = "#585b70"  # Surface 2
 # separator      = "#585b70"  # Surface 2
 # wizard_title   = "#cba6f7"  # Mauve

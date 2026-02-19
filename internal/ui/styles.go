@@ -21,6 +21,7 @@ type Styles struct {
 	Conflicts     lipgloss.Style
 	Notification  lipgloss.Style
 	Help          lipgloss.Style
+	HelpActive    lipgloss.Style
 	Border        lipgloss.Style
 	Separator     lipgloss.Style
 	WizardTitle   lipgloss.Style
@@ -85,6 +86,9 @@ func NewStyles(c config.Colors) Styles {
 
 		Help: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(c.Help)),
+
+		HelpActive: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(c.HelpActive)),
 
 		Border: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).

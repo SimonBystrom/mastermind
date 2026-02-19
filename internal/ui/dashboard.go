@@ -591,13 +591,58 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	}
 
-	// Help — use two lines when narrow
+	// Help — style available actions lighter based on selected agent status
 	b.WriteString("\n")
-	helpLine := fmt.Sprintf("  n: new │ enter: focus │ p: preview │ m: merge │ d: dismiss │ D: dismiss+del │ s: sort (%s) │ q: quit", m.sortLabel())
-	if cw < 80 {
-		helpLine = fmt.Sprintf("  n: new │ enter: focus │ p: preview │ m: merge\n  d: dismiss │ D: del │ s: sort (%s) │ q: quit", m.sortLabel())
+
+	// Determine which actions are available for the selected agent
+	var selectedStatus agent.Status
+	hasSelection := false
+	if agents := m.sortedAgents(); len(agents) > 0 && m.cursor < len(agents) {
+		hasSelection = true
+		selectedStatus = agents[m.cursor].GetStatus()
 	}
-	b.WriteString(m.styles.Help.Render(helpLine))
+
+	canPreview := hasSelection && (selectedStatus == agent.StatusReviewReady ||
+		selectedStatus == agent.StatusReviewed ||
+		selectedStatus == agent.StatusReviewing ||
+		selectedStatus == agent.StatusPreviewing)
+	canMerge := hasSelection && (selectedStatus == agent.StatusReviewed ||
+		selectedStatus == agent.StatusReviewReady)
+
+	dim := m.styles.Help
+	active := m.styles.HelpActive
+	sep := dim.Render(" │ ")
+
+	styleFor := func(available bool) lipgloss.Style {
+		if available {
+			return active
+		}
+		return dim
+	}
+
+	var helpLine string
+	if cw < 80 {
+		helpLine = "  " +
+			active.Render("n: new") + sep +
+			styleFor(hasSelection).Render("enter: focus") + sep +
+			styleFor(canPreview).Render("p: preview") + sep +
+			styleFor(canMerge).Render("m: merge") + "\n  " +
+			styleFor(hasSelection).Render("d: dismiss") + sep +
+			styleFor(hasSelection).Render("D: del") + sep +
+			active.Render(fmt.Sprintf("s: sort (%s)", m.sortLabel())) + sep +
+			active.Render("q: quit")
+	} else {
+		helpLine = "  " +
+			active.Render("n: new") + sep +
+			styleFor(hasSelection).Render("enter: focus") + sep +
+			styleFor(canPreview).Render("p: preview") + sep +
+			styleFor(canMerge).Render("m: merge") + sep +
+			styleFor(hasSelection).Render("d: dismiss") + sep +
+			styleFor(hasSelection).Render("D: dismiss+del") + sep +
+			active.Render(fmt.Sprintf("s: sort (%s)", m.sortLabel())) + sep +
+			active.Render("q: quit")
+	}
+	b.WriteString(helpLine)
 
 	return b.String()
 }
