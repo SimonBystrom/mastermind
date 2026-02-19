@@ -434,21 +434,47 @@ func (m dashboardModel) ViewContent() string {
 	}
 	b.WriteString("\n")
 
-	// Agent table — compute column widths dynamically.
-	// Fixed columns: indent(2) + ID(4) + gaps(7×1) + Status(12) + Duration(10) + Cost(8) + Ctx%(6) + Lines(10) + indicator(2) = 61
-	const fixedCols = 61
-	flexSpace := cw - fixedCols
-	if flexSpace < 10 {
-		flexSpace = 10
+	// Agent table — flex column layout.
+	// Each column has a minimum width and a flex weight. After giving every
+	// column its minimum, remaining space is distributed proportionally.
+	type col struct {
+		min, weight int
 	}
-	// Split remaining space between Model and Branch (roughly 30/70)
-	modelCol := flexSpace * 30 / 100
-	if modelCol < 5 {
-		modelCol = 5
+	cols := [8]col{
+		{3, 1},  // 0: ID
+		{8, 2},  // 1: Model
+		{10, 3}, // 2: Branch
+		{10, 2}, // 3: Status
+		{7, 2},  // 4: Duration
+		{6, 1},  // 5: Cost
+		{4, 1},  // 6: Ctx%
+		{8, 2},  // 7: Lines
 	}
-	branchCol := flexSpace - modelCol
-	if branchCol < 5 {
-		branchCol = 5
+	const indent = 2
+	const gaps = 8   // 1-char gap between each of 8 cols + indicator
+	const indic = 2  // indicator width
+	totalMin := indent + gaps + indic
+	totalWeight := 0
+	for _, c := range cols {
+		totalMin += c.min
+		totalWeight += c.weight
+	}
+	extra := cw - totalMin
+	if extra < 0 {
+		extra = 0
+	}
+	// Compute actual widths
+	var colW [8]int
+	for i, c := range cols {
+		colW[i] = c.min + extra*c.weight/totalWeight
+	}
+	// Distribute rounding remainder to Branch (largest flex col)
+	used := indent + gaps + indic
+	for _, w := range colW {
+		used += w
+	}
+	if rem := cw - used; rem > 0 {
+		colW[2] += rem
 	}
 
 	agents := m.sortedAgents()
@@ -457,7 +483,9 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	} else {
 		// Header
-		header := fmt.Sprintf("  %-4s %-*s %-*s %-12s %-10s %-8s %-6s %-10s", "ID", modelCol, "Model", branchCol, "Branch", "Status", "Duration", "Cost", "Ctx%", "Lines")
+		header := fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+			colW[0], "ID", colW[1], "Model", colW[2], "Branch", colW[3], "Status",
+			colW[4], "Duration", colW[5], "Cost", colW[6], "Ctx%", colW[7], "Lines")
 		b.WriteString(m.styles.Header.Render(header))
 		b.WriteString("\n")
 
@@ -515,10 +543,10 @@ func (m dashboardModel) ViewContent() string {
 				}
 			}
 
-			// Pad styled status to 12 visual characters (fmt %-12s counts
+			// Pad styled status to colW[3] visual characters (fmt %-*s counts
 			// bytes which breaks with ANSI escape codes from lipgloss).
-			if w := lipgloss.Width(styledStatus); w < 12 {
-				styledStatus += strings.Repeat(" ", 12-w)
+			if w := lipgloss.Width(styledStatus); w < colW[3] {
+				styledStatus += strings.Repeat(" ", colW[3]-w)
 			}
 
 			// Statusline data columns
@@ -543,23 +571,28 @@ func (m dashboardModel) ViewContent() string {
 				linesStr = fmt.Sprintf("+%d -%d", sd.LinesAdded, sd.LinesRemoved)
 			}
 
-			// Pad ctxStr to 6 visual characters (may contain ANSI codes)
-			if w := lipgloss.Width(ctxStr); w < 6 {
-				ctxStr += strings.Repeat(" ", 6-w)
+			// Pad ctxStr to colW[6] visual characters (may contain ANSI codes)
+			if w := lipgloss.Width(ctxStr); w < colW[6] {
+				ctxStr += strings.Repeat(" ", colW[6]-w)
 			}
 
 			// Build the row content
-			row := fmt.Sprintf("  %-4s %-*s %-*s %s%-10s %-8s %s%-10s%s",
-				a.ID,
-				modelCol, truncate(modelStr, modelCol),
-				branchCol, truncate(a.Branch, branchCol),
+			row := fmt.Sprintf("  %-*s %-*s %-*s %s%-*s %-*s %s%-*s%s",
+				colW[0], a.ID,
+				colW[1], truncate(modelStr, colW[1]),
+				colW[2], truncate(a.Branch, colW[2]),
 				styledStatus,
-				dur,
-				costStr,
+				colW[4], dur,
+				colW[5], costStr,
 				ctxStr,
-				linesStr,
+				colW[7], linesStr,
 				indicator,
 			)
+
+			// Pad row to full content width so selected highlight spans entire row
+			if w := lipgloss.Width(row); w < cw {
+				row += strings.Repeat(" ", cw-w)
+			}
 
 			if i == m.cursor {
 				row = m.styles.Selected.Render(row)
