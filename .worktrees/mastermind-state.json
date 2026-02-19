@@ -1,17 +1,17 @@
 [
   {
-    "id": "a3",
+    "id": "a2",
     "name": "",
-    "branch": "status-bar/init",
+    "branch": "overview/name",
     "base_branch": "master",
-    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/status-bar/init",
-    "tmux_window": "@77",
-    "tmux_pane_id": "%133",
-    "status": "running",
-    "waiting_for": "",
+    "worktree_path": "/Users/simonbystrom/code/mastermind/.worktrees/overview/name",
+    "tmux_window": "@79",
+    "tmux_pane_id": "%141",
+    "status": "waiting",
+    "waiting_for": "permission",
     "ever_active": true,
     "exit_code": 0,
-    "started_at": "2026-02-19T13:05:27.713414+09:00",
-    "finished_at": "2026-02-19T13:17:59.09906+09:00"
+    "started_at": "2026-02-19T13:41:11.096325+09:00",
+    "finished_at": "2026-02-19T13:41:53.520881+09:00"
   }
 ]
