@@ -530,7 +530,7 @@ func (m dashboardModel) ViewContent() string {
 				if sd.Model != "" {
 					modelStr = sd.Model
 				}
-				if sd.DurationMs > 0 {
+				if sd.DurationMs > 0 && !a.GetFinishedAt().IsZero() {
 					dur = formatDuration(time.Duration(sd.DurationMs) * time.Millisecond)
 				}
 				costStr = fmt.Sprintf("$%.2f", sd.CostUSD)
