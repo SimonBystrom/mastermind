@@ -543,47 +543,83 @@ func (m dashboardModel) ViewContent() string {
 				}
 			}
 
-			// Pad styled status to colW[3] visual characters (fmt %-*s counts
-			// bytes which breaks with ANSI escape codes from lipgloss).
-			if w := lipgloss.Width(styledStatus); w < colW[3] {
-				styledStatus += strings.Repeat(" ", colW[3]-w)
-			}
-
 			// Statusline data columns
 			modelStr := "-"
 			costStr := "-"
-			ctxStr := "-"
+			ctxPctStr := "-"
 			linesStr := "-"
+			ctxPct := 0
 			if sd := a.GetStatuslineData(); sd != nil {
 				if sd.Model != "" {
 					modelStr = sd.Model
 				}
 				costStr = fmt.Sprintf("$%.2f", sd.CostUSD)
-				ctxPct := int(sd.ContextPct)
-				if ctxPct > 80 {
-					ctxStr = m.styles.Attention.Render(fmt.Sprintf("%d%%", ctxPct))
-				} else {
-					ctxStr = fmt.Sprintf("%d%%", ctxPct)
-				}
+				ctxPct = int(sd.ContextPct)
+				ctxPctStr = fmt.Sprintf("%d%%", ctxPct)
 				linesStr = fmt.Sprintf("+%d -%d", sd.LinesAdded, sd.LinesRemoved)
 			}
 
-			// Pad ctxStr to colW[6] visual characters (may contain ANSI codes)
-			if w := lipgloss.Width(ctxStr); w < colW[6] {
-				ctxStr += strings.Repeat(" ", colW[6]-w)
+			isSelected := i == m.cursor
+
+			// For selected rows, use plain text to avoid ANSI resets from
+			// inner lipgloss styles breaking the outer background highlight.
+			displayStatus := styledStatus
+			displayCtx := ctxPctStr
+			displayIndicator := indicator
+			if isSelected {
+				// Plain status text
+				plainStatus := string(status)
+				switch {
+				case status == agent.StatusWaiting && waitingFor == "permission":
+					plainStatus = "permission"
+				case status == agent.StatusWaiting && waitingFor == "unknown":
+					plainStatus = "attention?"
+				case status == agent.StatusWaiting:
+					plainStatus = "waiting"
+				case status == agent.StatusReviewReady:
+					plainStatus = "review ready"
+				case status == agent.StatusReviewing:
+					plainStatus = "reviewing"
+				case status == agent.StatusReviewed:
+					plainStatus = "reviewed"
+				case status == agent.StatusPreviewing:
+					plainStatus = "previewing"
+				case status == agent.StatusConflicts:
+					plainStatus = "conflicts"
+				}
+				displayStatus = plainStatus
+				if w := len(displayStatus); w < colW[3] {
+					displayStatus += strings.Repeat(" ", colW[3]-w)
+				}
+				if w := len(displayCtx); w < colW[6] {
+					displayCtx += strings.Repeat(" ", colW[6]-w)
+				}
+				displayIndicator = "  "
+			} else {
+				// Pad styled status to colW[3] visual characters (fmt %-*s counts
+				// bytes which breaks with ANSI escape codes from lipgloss).
+				if w := lipgloss.Width(displayStatus); w < colW[3] {
+					displayStatus += strings.Repeat(" ", colW[3]-w)
+				}
+				if ctxPct > 80 {
+					displayCtx = m.styles.Attention.Render(ctxPctStr)
+				}
+				if w := lipgloss.Width(displayCtx); w < colW[6] {
+					displayCtx += strings.Repeat(" ", colW[6]-w)
+				}
 			}
 
-			// Build the row content
-			row := fmt.Sprintf("  %-*s %-*s %-*s %s%-*s %-*s %s%-*s%s",
+			// Build the row content — gaps between all columns must match header
+			row := fmt.Sprintf("  %-*s %-*s %-*s %s %-*s %-*s %s %-*s %s",
 				colW[0], a.ID,
 				colW[1], truncate(modelStr, colW[1]),
 				colW[2], truncate(a.Branch, colW[2]),
-				styledStatus,
+				displayStatus,
 				colW[4], dur,
 				colW[5], costStr,
-				ctxStr,
+				displayCtx,
 				colW[7], linesStr,
-				indicator,
+				displayIndicator,
 			)
 
 			// Pad row to full content width so selected highlight spans entire row
@@ -591,7 +627,7 @@ func (m dashboardModel) ViewContent() string {
 				row += strings.Repeat(" ", cw-w)
 			}
 
-			if i == m.cursor {
+			if isSelected {
 				row = m.styles.Selected.Render(row)
 			}
 
