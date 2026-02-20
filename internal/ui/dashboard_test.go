@@ -113,8 +113,8 @@ func TestSortedAgents_ByDuration(t *testing.T) {
 
 	older := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
 	older.ID = "o1"
-	// Finish older agent with a known duration
-	older.SetFinished(0, older.StartedAt.Add(10*time.Minute))
+	// Give older agent a large accumulated duration so it sorts first
+	older.SetDurationState(10*time.Minute, time.Time{})
 
 	store.Add(newer)
 	store.Add(older)

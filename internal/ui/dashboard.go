@@ -521,7 +521,7 @@ func (m dashboardModel) ViewContent() string {
 				styledStatus = string(status)
 			}
 
-			dur := formatDuration(a.Duration()) // fallback
+			dur := formatDuration(a.Duration())
 
 			indicator := "  "
 			switch status {
@@ -557,9 +557,6 @@ func (m dashboardModel) ViewContent() string {
 			if sd := a.GetStatuslineData(); sd != nil {
 				if sd.Model != "" {
 					modelStr = sd.Model
-				}
-				if sd.DurationMs > 0 && !a.GetFinishedAt().IsZero() {
-					dur = formatDuration(time.Duration(sd.DurationMs) * time.Millisecond)
 				}
 				costStr = fmt.Sprintf("$%.2f", sd.CostUSD)
 				ctxPct := int(sd.ContextPct)

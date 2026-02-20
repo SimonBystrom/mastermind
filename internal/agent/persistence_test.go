@@ -93,6 +93,8 @@ func TestSaveState_PreservesAllFields(t *testing.T) {
 	a.SetFinished(1, finished)
 	a.SetLazygitPaneID("%20")
 	a.SetPreReviewCommit("deadbeef")
+	runStart := time.Date(2025, 1, 1, 12, 3, 0, 0, time.UTC)
+	a.SetDurationState(3*time.Minute, runStart)
 
 	if err := SaveState(path, []*Agent{a}); err != nil {
 		t.Fatalf("SaveState: %v", err)
@@ -148,5 +150,11 @@ func TestSaveState_PreservesAllFields(t *testing.T) {
 	}
 	if pa.PreReviewCommit != "deadbeef" {
 		t.Errorf("PreReviewCommit = %q", pa.PreReviewCommit)
+	}
+	if pa.AccumulatedDuration != 3*time.Minute {
+		t.Errorf("AccumulatedDuration = %v, want 3m", pa.AccumulatedDuration)
+	}
+	if !pa.RunningStartedAt.Equal(runStart) {
+		t.Errorf("RunningStartedAt = %v, want %v", pa.RunningStartedAt, runStart)
 	}
 }

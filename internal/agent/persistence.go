@@ -21,8 +21,10 @@ type PersistedAgent struct {
 	ExitCode        int       `json:"exit_code"`
 	StartedAt       time.Time `json:"started_at"`
 	FinishedAt      time.Time `json:"finished_at"`
-	LazygitPaneID   string    `json:"lazygit_pane_id,omitempty"`
-	PreReviewCommit string    `json:"pre_review_commit,omitempty"`
+	LazygitPaneID       string        `json:"lazygit_pane_id,omitempty"`
+	PreReviewCommit     string        `json:"pre_review_commit,omitempty"`
+	AccumulatedDuration time.Duration `json:"accumulated_duration"`
+	RunningStartedAt    time.Time     `json:"running_started_at"`
 }
 
 // SaveState atomically writes agent state to a JSON file.
@@ -42,8 +44,10 @@ func SaveState(path string, agents []*Agent) error {
 			ExitCode:        a.GetExitCode(),
 			StartedAt:       a.StartedAt,
 			FinishedAt:      a.GetFinishedAt(),
-			LazygitPaneID:   a.GetLazygitPaneID(),
-			PreReviewCommit: a.GetPreReviewCommit(),
+			LazygitPaneID:       a.GetLazygitPaneID(),
+			PreReviewCommit:     a.GetPreReviewCommit(),
+			AccumulatedDuration: a.GetAccumulatedDuration(),
+			RunningStartedAt:    a.GetRunningStartedAt(),
 		}
 	}
 

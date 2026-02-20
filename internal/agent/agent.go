@@ -43,19 +43,25 @@ type Agent struct {
 	mergeDeleteBranch   bool
 	mergeRemoveWorktree bool
 
+	// Duration tracking: only counts time spent in StatusRunning.
+	accumulatedDuration time.Duration // total time accumulated in previous running periods
+	runningStartedAt    time.Time     // when the current running period started (zero if not running)
+
 	// Claude Code statusline data (read from sidecar file)
 	statuslineData *StatuslineData
 }
 
 func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
+	now := time.Now()
 	return &Agent{
-		Branch:       branch,
-		BaseBranch:   baseBranch,
-		WorktreePath: worktreePath,
-		TmuxWindow:   tmuxWindow,
-		TmuxPaneID:   tmuxPaneID,
-		StartedAt:    time.Now(),
-		status:       StatusRunning,
+		Branch:           branch,
+		BaseBranch:       baseBranch,
+		WorktreePath:     worktreePath,
+		TmuxWindow:       tmuxWindow,
+		TmuxPaneID:       tmuxPaneID,
+		StartedAt:        now,
+		status:           StatusRunning,
+		runningStartedAt: now, // starts in running state
 	}
 }
 
@@ -68,7 +74,21 @@ func (a *Agent) GetStatus() Status {
 func (a *Agent) SetStatus(s Status) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	prev := a.status
 	a.status = s
+
+	// Pause timer when leaving running state.
+	if prev == StatusRunning && s != StatusRunning {
+		if !a.runningStartedAt.IsZero() {
+			a.accumulatedDuration += time.Since(a.runningStartedAt)
+			a.runningStartedAt = time.Time{}
+		}
+	}
+
+	// Resume timer when entering running state.
+	if s == StatusRunning && prev != StatusRunning {
+		a.runningStartedAt = time.Now()
+	}
 }
 
 func (a *Agent) GetWaitingFor() string {
@@ -176,10 +196,32 @@ func (a *Agent) SetStatuslineData(sd *StatuslineData) {
 
 func (a *Agent) Duration() time.Duration {
 	a.mu.RLock()
-	finished := a.finishedAt
+	acc := a.accumulatedDuration
+	started := a.runningStartedAt
 	a.mu.RUnlock()
-	if finished.IsZero() {
-		return time.Since(a.StartedAt)
+	if !started.IsZero() {
+		// Currently running: add live elapsed time.
+		return acc + time.Since(started)
 	}
-	return finished.Sub(a.StartedAt)
+	return acc
+}
+
+func (a *Agent) GetAccumulatedDuration() time.Duration {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.accumulatedDuration
+}
+
+func (a *Agent) GetRunningStartedAt() time.Time {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.runningStartedAt
+}
+
+// SetDurationState restores duration tracking fields (used during recovery).
+func (a *Agent) SetDurationState(accumulated time.Duration, runningStarted time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.accumulatedDuration = accumulated
+	a.runningStartedAt = runningStarted
 }

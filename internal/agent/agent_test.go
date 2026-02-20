@@ -136,7 +136,7 @@ func TestAgent_MergePreferences(t *testing.T) {
 func TestAgent_Duration_Running(t *testing.T) {
 	a := NewAgent("b", "main", "/wt", "@1", "%0")
 
-	// Running agent: Duration = time.Since(StartedAt)
+	// Running agent: Duration increments via wall clock
 	time.Sleep(10 * time.Millisecond)
 	d := a.Duration()
 	if d < 10*time.Millisecond {
@@ -144,15 +144,47 @@ func TestAgent_Duration_Running(t *testing.T) {
 	}
 }
 
+func TestAgent_Duration_PausesWhenNotRunning(t *testing.T) {
+	a := NewAgent("b", "main", "/wt", "@1", "%0")
+
+	// Run for a bit
+	time.Sleep(20 * time.Millisecond)
+
+	// Transition to waiting — timer pauses
+	a.SetStatus(StatusWaiting)
+	d1 := a.Duration()
+
+	// Sleep while not running — duration should NOT increase
+	time.Sleep(20 * time.Millisecond)
+	d2 := a.Duration()
+
+	if d2 != d1 {
+		t.Errorf("Duration increased while paused: %v -> %v", d1, d2)
+	}
+
+	// Resume running — timer resumes
+	a.SetStatus(StatusRunning)
+	time.Sleep(20 * time.Millisecond)
+	d3 := a.Duration()
+
+	if d3 < d1+20*time.Millisecond {
+		t.Errorf("Duration() = %v after resume, expected >= %v", d3, d1+20*time.Millisecond)
+	}
+}
+
 func TestAgent_Duration_Finished(t *testing.T) {
 	a := NewAgent("b", "main", "/wt", "@1", "%0")
 
-	finishTime := a.StartedAt.Add(5 * time.Second)
-	a.SetFinished(0, finishTime)
-
+	// Run for a bit, then pause, then finish
+	time.Sleep(10 * time.Millisecond)
+	a.SetStatus(StatusReviewReady)
 	d := a.Duration()
-	if d != 5*time.Second {
-		t.Errorf("Duration() = %v, want 5s for finished agent", d)
+
+	// Duration should be frozen after leaving running state
+	time.Sleep(10 * time.Millisecond)
+	d2 := a.Duration()
+	if d2 != d {
+		t.Errorf("Duration changed after leaving running: %v -> %v", d, d2)
 	}
 }
 

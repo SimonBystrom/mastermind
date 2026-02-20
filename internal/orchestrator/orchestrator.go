@@ -916,6 +916,7 @@ func (o *Orchestrator) RecoverAgents() {
 		if pa.PreReviewCommit != "" {
 			a.SetPreReviewCommit(pa.PreReviewCommit)
 		}
+		a.SetDurationState(pa.AccumulatedDuration, pa.RunningStartedAt)
 
 		o.store.Add(a)
 		recovered++
