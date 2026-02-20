@@ -1,1 +1,5 @@
 .claude-status.json
+.worktrees/
+.claude/settings.local.json
+.claude/hooks/
+.mastermind-status

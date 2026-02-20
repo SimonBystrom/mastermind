@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // hookScript is the shell script that Claude Code hooks invoke.
@@ -130,84 +128,6 @@ func WriteHookFiles(worktreePath string) error {
 		return fmt.Errorf("write settings: %w", err)
 	}
 
-	// Ensure hook files and status file are gitignored via git's exclude mechanism
-	// (uses .git/info/exclude so we don't create untracked .gitignore files)
-	if err := ensureGitExclude(worktreePath); err != nil {
-		return fmt.Errorf("write git exclude: %w", err)
-	}
-
 	return nil
 }
 
-// ensureGitExclude adds mastermind-related paths to the git exclude file
-// for the worktree. This uses .git/info/exclude (or the worktree-specific
-// equivalent) so no untracked files are created.
-func ensureGitExclude(worktreePath string) error {
-	// Find the common git dir (shared across worktrees) so exclude entries
-	// are respected by all worktrees.
-	out, err := exec.Command("git", "-C", worktreePath, "rev-parse", "--git-common-dir").Output()
-	if err != nil {
-		return fmt.Errorf("find git common dir: %w", err)
-	}
-	gitCommonDir := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(gitCommonDir) {
-		gitCommonDir = filepath.Join(worktreePath, gitCommonDir)
-	}
-
-	excludePath := filepath.Join(gitCommonDir, "info", "exclude")
-	if err := os.MkdirAll(filepath.Dir(excludePath), 0o755); err != nil {
-		return err
-	}
-
-	existing, _ := os.ReadFile(excludePath)
-	content := string(existing)
-
-	entries := []string{
-		".claude/settings.local.json",
-		".claude/hooks/",
-		".mastermind-status",
-	}
-	// Note: we keep fine-grained entries rather than blanket ".claude/" so
-	// other .claude files (like .claude/settings.json) remain tracked.
-
-	var toAdd []string
-	for _, entry := range entries {
-		if !containsLine(content, entry) {
-			toAdd = append(toAdd, entry)
-		}
-	}
-
-	if len(toAdd) == 0 {
-		return nil
-	}
-
-	f, err := os.OpenFile(excludePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if len(content) > 0 && content[len(content)-1] != '\n' {
-		if _, err := f.WriteString("\n"); err != nil {
-			return err
-		}
-	}
-
-	for _, entry := range toAdd {
-		if _, err := f.WriteString(entry + "\n"); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// containsLine checks if the content contains a line matching the given entry.
-func containsLine(content, entry string) bool {
-	for _, line := range strings.Split(content, "\n") {
-		if strings.TrimSpace(line) == entry {
-			return true
-		}
-	}
-	return false
-}
