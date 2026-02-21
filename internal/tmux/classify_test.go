@@ -191,64 +191,6 @@ func TestHashContent(t *testing.T) {
 	}
 }
 
-func TestExtractTeammateNameFromContent(t *testing.T) {
-	tests := []struct {
-		name    string
-		content string
-		want    string
-	}{
-		{
-			name:    "basic teammate name",
-			content: "Some output\n@code-quality\nMore output\n",
-			want:    "code-quality",
-		},
-		{
-			name:    "teammate name in status line",
-			content: "Working on task...\n@performance\n[Sonnet 4.6] 46% ctx | $0.73 | +10 -5\n",
-			want:    "performance",
-		},
-		{
-			name:    "teammate name with digits",
-			content: "Output\n@worker-2\nMore\n",
-			want:    "worker-2",
-		},
-		{
-			name:    "no teammate name",
-			content: "Regular output without any labels\nJust text\n",
-			want:    "",
-		},
-		{
-			name:    "empty content",
-			content: "",
-			want:    "",
-		},
-		{
-			name:    "docs-security name",
-			content: "Analyzing files...\n@docs-security\nRunning checks\n",
-			want:    "docs-security",
-		},
-		{
-			name:    "single char name not matched",
-			content: "@x should not match single char\n",
-			want:    "",
-		},
-		{
-			name:    "email address not matched as name",
-			content: "Contact test@example.com for help\n",
-			want:    "example",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ExtractTeammateNameFromContent(tt.content)
-			if got != tt.want {
-				t.Errorf("ExtractTeammateNameFromContent() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestParseStatuslineFromContent(t *testing.T) {
 	tests := []struct {
 		name    string

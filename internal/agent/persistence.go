@@ -25,9 +25,6 @@ type PersistedAgent struct {
 	PreReviewCommit     string        `json:"pre_review_commit,omitempty"`
 	AccumulatedDuration time.Duration `json:"accumulated_duration"`
 	RunningStartedAt    time.Time     `json:"running_started_at"`
-	TeamName            string        `json:"team_name,omitempty"`
-	ParentID            string        `json:"parent_id,omitempty"`
-	TeammateName        string        `json:"teammate_name,omitempty"`
 }
 
 // SaveState atomically writes agent state to a JSON file.
@@ -53,11 +50,6 @@ func SaveState(path string, agents []*Agent) error {
 			AccumulatedDuration: snap.AccumulatedDuration,
 			RunningStartedAt:    snap.RunningStartedAt,
 		}
-		if ti := a.GetTeamInfo(); ti != nil {
-			persisted[i].TeamName = ti.TeamName
-		}
-		persisted[i].ParentID = a.ParentID
-		persisted[i].TeammateName = a.TeammateName
 	}
 
 	data, err := json.MarshalIndent(persisted, "", "  ")

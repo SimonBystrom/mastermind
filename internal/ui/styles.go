@@ -32,7 +32,6 @@ type Styles struct {
 	Logo          lipgloss.Style
 	Previewing    lipgloss.Style
 	PreviewBanner lipgloss.Style
-	Team          lipgloss.Style
 }
 
 // NewStyles builds a Styles from config color values. Non-color attributes
@@ -130,8 +129,5 @@ func NewStyles(c config.Colors) Styles {
 			Foreground(lipgloss.Color(c.PreviewBanner)).
 			Bold(true).
 			Italic(true),
-
-		Team: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(c.Team)),
 	}
 }

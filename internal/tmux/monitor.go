@@ -212,26 +212,6 @@ func detectNumberedList(bottomLines []string) bool {
 	return summaryVerbs < numbered/2
 }
 
-// ExtractTeammateName captures the pane content and looks for a @teammate-name
-// label rendered by Claude Code. Returns the extracted name or empty string.
-func (m *PaneMonitor) ExtractTeammateName(paneID string) string {
-	content := capturePane(paneID)
-	return ExtractTeammateNameFromContent(content)
-}
-
-// ExtractTeammateNameFromContent extracts a @teammate-name label from raw pane
-// content text. Returns the name (without @) or empty string if not found.
-func ExtractTeammateNameFromContent(content string) string {
-	if content == "" {
-		return ""
-	}
-	match := TeammateNamePattern.FindStringSubmatch(content)
-	if len(match) < 2 {
-		return ""
-	}
-	return match[1]
-}
-
 // ParseStatuslineFromContent extracts Claude Code statusline data from raw pane
 // content. The statusline format is: [Model Name] XX% ctx | $X.XX | +N -N
 func ParseStatuslineFromContent(content string) *StatuslineFromPane {

@@ -3,8 +3,6 @@ package agent
 import (
 	"sync"
 	"time"
-
-	"github.com/simonbystrom/mastermind/internal/team"
 )
 
 type Status string
@@ -31,10 +29,6 @@ type Agent struct {
 	TmuxPaneID   string
 	StartedAt    time.Time
 
-	// Team teammate fields (immutable once set)
-	ParentID     string // non-empty if this is a teammate agent (points to team lead agent ID)
-	TeammateName string // name from the team config (e.g., "code-quality")
-
 	// Mutable fields (protected by mu)
 	mu              sync.RWMutex
 	status          Status
@@ -55,9 +49,6 @@ type Agent struct {
 
 	// Claude Code statusline data (read from sidecar file)
 	statuslineData *StatuslineData
-
-	// Agent team info (nil if not a team lead)
-	teamInfo *team.TeamInfo
 }
 
 func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
@@ -72,11 +63,6 @@ func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *
 		status:           StatusRunning,
 		runningStartedAt: now, // starts in running state
 	}
-}
-
-// IsTeammate returns true if this agent is a teammate (sub-agent of a team lead).
-func (a *Agent) IsTeammate() bool {
-	return a.ParentID != ""
 }
 
 func (a *Agent) GetStatus() Status {
@@ -209,18 +195,6 @@ func (a *Agent) SetStatuslineData(sd *StatuslineData) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.statuslineData = sd
-}
-
-func (a *Agent) GetTeamInfo() *team.TeamInfo {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.teamInfo
-}
-
-func (a *Agent) SetTeamInfo(ti *team.TeamInfo) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.teamInfo = ti
 }
 
 func (a *Agent) Duration() time.Duration {

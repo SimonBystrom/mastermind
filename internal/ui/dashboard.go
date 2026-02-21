@@ -240,9 +240,6 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "m":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				if a.IsTeammate() {
-					break
-				}
 				status := a.GetStatus()
 				if status == agent.StatusReviewed || status == agent.StatusReviewReady {
 					name := a.ID
@@ -259,9 +256,6 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "d":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				if a.IsTeammate() {
-					break
-				}
 				name := a.ID
 				return m, func() tea.Msg {
 					return startDismissMsg{
@@ -296,9 +290,6 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "p":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				if a.IsTeammate() {
-					break
-				}
 				previewID := m.orch.GetPreviewAgentID()
 				if previewID != "" && previewID == a.ID {
 					// Stop preview for this agent
@@ -322,9 +313,6 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "D":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
-				if a.IsTeammate() {
-					break
-				}
 				name := a.ID
 				return m, func() tea.Msg {
 					return startDismissMsg{
@@ -432,7 +420,7 @@ func (m dashboardModel) ViewContent() string {
 	type col struct {
 		min, weight int
 	}
-	cols := [9]col{
+	cols := [8]col{
 		{3, 1},  // 0: ID
 		{8, 2},  // 1: Model
 		{10, 3}, // 2: Branch
@@ -441,10 +429,9 @@ func (m dashboardModel) ViewContent() string {
 		{6, 1},  // 5: Cost
 		{4, 1},  // 6: Ctx%
 		{8, 2},  // 7: Lines
-		{8, 2},  // 8: Team
 	}
 	const indent = 2
-	const gaps = 9   // 1-char gap between each of 9 cols + indicator
+	const gaps = 8   // 1-char gap between each of 8 cols + indicator
 	const indic = 2  // indicator width
 	totalMin := indent + gaps + indic
 	totalWeight := 0
@@ -457,7 +444,7 @@ func (m dashboardModel) ViewContent() string {
 		extra = 0
 	}
 	// Compute actual widths
-	var colW [9]int
+	var colW [8]int
 	for i, c := range cols {
 		colW[i] = c.min + extra*c.weight/totalWeight
 	}
@@ -476,9 +463,9 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	} else {
 		// Header
-		header := fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+		header := fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
 			colW[0], "ID", colW[1], "Model", colW[2], "Branch", colW[3], "Status",
-			colW[4], "Duration", colW[5], "Cost", colW[6], "Ctx%", colW[7], "Lines", colW[8], "Team")
+			colW[4], "Duration", colW[5], "Cost", colW[6], "Ctx%", colW[7], "Lines")
 		b.WriteString(m.styles.Header.Render(header))
 		b.WriteString("\n")
 
@@ -536,18 +523,6 @@ func (m dashboardModel) ViewContent() string {
 				}
 			}
 
-			// Team data column
-			teamStr := ""
-			if a.IsTeammate() {
-				if a.TeammateName != "" {
-					teamStr = a.TeammateName
-				} else {
-					teamStr = "teammate"
-				}
-			} else if ti := a.GetTeamInfo(); ti != nil {
-				teamStr = fmt.Sprintf("%da %d/%dt", ti.MemberCount, ti.CompletedTasks, ti.TotalTasks)
-			}
-
 			// Statusline data columns
 			modelStr := "-"
 			costStr := "-"
@@ -581,7 +556,7 @@ func (m dashboardModel) ViewContent() string {
 					}
 				}
 
-				row = fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s  ",
+				row = fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s  ",
 					colW[0], a.ID,
 					colW[1], truncate(modelStr, colW[1]),
 					colW[2], truncate(a.Branch, colW[2]),
@@ -590,7 +565,6 @@ func (m dashboardModel) ViewContent() string {
 					colW[5], costStr,
 					colW[6], ctxPctStr,
 					colW[7], linesStr,
-					colW[8], truncate(teamStr, colW[8]),
 				)
 
 				// Pad to full content width using visual width for safety
@@ -599,7 +573,7 @@ func (m dashboardModel) ViewContent() string {
 				}
 				row = m.styles.Selected.Render(row)
 			} else {
-				// Non-selected row: styled status, ctx%, team, and indicator.
+				// Non-selected row: styled status, ctx%, and indicator.
 				displayStatus := styledStatus
 				// Pad styled status to colW[3] visual characters (fmt %-*s counts
 				// bytes which breaks with ANSI escape codes from lipgloss).
@@ -615,15 +589,7 @@ func (m dashboardModel) ViewContent() string {
 					displayCtx += strings.Repeat(" ", colW[6]-w)
 				}
 
-				displayTeam := teamStr
-				if teamStr != "" {
-					displayTeam = m.styles.Team.Render(teamStr)
-				}
-				if w := lipgloss.Width(displayTeam); w < colW[8] {
-					displayTeam += strings.Repeat(" ", colW[8]-w)
-				}
-
-				row = fmt.Sprintf("  %-*s %-*s %-*s %s %-*s %-*s %s %-*s %s %s",
+				row = fmt.Sprintf("  %-*s %-*s %-*s %s %-*s %-*s %s %-*s %s",
 					colW[0], a.ID,
 					colW[1], truncate(modelStr, colW[1]),
 					colW[2], truncate(a.Branch, colW[2]),
@@ -632,7 +598,6 @@ func (m dashboardModel) ViewContent() string {
 					colW[5], costStr,
 					displayCtx,
 					colW[7], linesStr,
-					displayTeam,
 					indicator,
 				)
 
