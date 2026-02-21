@@ -198,10 +198,10 @@ func TestParseStatuslineFromContent(t *testing.T) {
 		want    *StatuslineFromPane
 	}{
 		{
-			name:    "full statusline",
-			content: "Some output\n[Sonnet 4.6] 46% ctx | $0.73 | +10 -5\n",
+			name:    "full statusline with git branch",
+			content: "Some output\n➜  myproject git:(main) [ctx: 46%] +10 -5 $0.7300  claude-sonnet-4-6\n",
 			want: &StatuslineFromPane{
-				Model:        "Sonnet 4.6",
+				Model:        "claude-sonnet-4-6",
 				ContextPct:   46,
 				CostUSD:      0.73,
 				LinesAdded:   10,
@@ -209,14 +209,25 @@ func TestParseStatuslineFromContent(t *testing.T) {
 			},
 		},
 		{
-			name:    "statusline with zero lines",
-			content: "Output\n[Opus 4.6] 12% ctx | $1.50 | +0 -0\n",
+			name:    "statusline without diff stats",
+			content: "Output\n➜  myproject git:(feature) [ctx: 12%] $1.5000  claude-opus-4-6\n",
 			want: &StatuslineFromPane{
-				Model:        "Opus 4.6",
+				Model:        "claude-opus-4-6",
 				ContextPct:   12,
 				CostUSD:      1.50,
 				LinesAdded:   0,
 				LinesRemoved: 0,
+			},
+		},
+		{
+			name:    "statusline without git branch",
+			content: "Output\n➜  myproject [ctx: 30%] +5 -2 $0.2500  claude-opus-4-6\n",
+			want: &StatuslineFromPane{
+				Model:        "claude-opus-4-6",
+				ContextPct:   30,
+				CostUSD:      0.25,
+				LinesAdded:   5,
+				LinesRemoved: 2,
 			},
 		},
 		{
@@ -231,9 +242,9 @@ func TestParseStatuslineFromContent(t *testing.T) {
 		},
 		{
 			name:    "statusline among other content",
-			content: "Building project...\nCompiling files...\n[Haiku 4.5] 88% ctx | $0.05 | +100 -50\nfor shortcuts\n",
+			content: "Building project...\nCompiling files...\n➜  app git:(dev) [ctx: 88%] +100 -50 $0.0500  claude-haiku-4-5\nfor shortcuts\n",
 			want: &StatuslineFromPane{
-				Model:        "Haiku 4.5",
+				Model:        "claude-haiku-4-5",
 				ContextPct:   88,
 				CostUSD:      0.05,
 				LinesAdded:   100,

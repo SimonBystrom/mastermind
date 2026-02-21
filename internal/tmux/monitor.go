@@ -213,7 +213,8 @@ func detectNumberedList(bottomLines []string) bool {
 }
 
 // ParseStatuslineFromContent extracts Claude Code statusline data from raw pane
-// content. The statusline format is: [Model Name] XX% ctx | $X.XX | +N -N
+// content. The statusline format (ANSI stripped by tmux capture-pane) is:
+// ➜  dirname git:(branch) [ctx: XX%] +N -N $X.XXXX  model
 func ParseStatuslineFromContent(content string) *StatuslineFromPane {
 	if content == "" {
 		return nil
@@ -222,31 +223,31 @@ func ParseStatuslineFromContent(content string) *StatuslineFromPane {
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
 		match := statuslineRegex.FindStringSubmatch(line)
-		if len(match) < 5 {
-			continue
-		}
-		model := match[1]
-		ctxPct, _ := strconv.ParseFloat(match[2], 64)
-		cost, _ := strconv.ParseFloat(match[3], 64)
-
-		// Parse lines changed: "+N -N"
-		linesChanged := match[4]
-		var linesAdded, linesRemoved int
-		parts := strings.Fields(linesChanged)
-		for _, p := range parts {
-			if strings.HasPrefix(p, "+") {
-				linesAdded, _ = strconv.Atoi(p[1:])
-			} else if strings.HasPrefix(p, "-") {
-				linesRemoved, _ = strconv.Atoi(p[1:])
+		if match != nil {
+			ctxPct, _ := strconv.ParseFloat(match[1], 64)
+			linesAdded, _ := strconv.Atoi(match[2])
+			linesRemoved, _ := strconv.Atoi(match[3])
+			cost, _ := strconv.ParseFloat(match[4], 64)
+			model := strings.TrimSpace(match[5])
+			return &StatuslineFromPane{
+				Model:        model,
+				ContextPct:   ctxPct,
+				CostUSD:      cost,
+				LinesAdded:   linesAdded,
+				LinesRemoved: linesRemoved,
 			}
 		}
-
-		return &StatuslineFromPane{
-			Model:        model,
-			ContextPct:   ctxPct,
-			CostUSD:      cost,
-			LinesAdded:   linesAdded,
-			LinesRemoved: linesRemoved,
+		// Try minimal format (no diff stats, e.g. when both added/removed are 0)
+		match = statuslineNoDiffRegex.FindStringSubmatch(line)
+		if match != nil {
+			ctxPct, _ := strconv.ParseFloat(match[1], 64)
+			cost, _ := strconv.ParseFloat(match[2], 64)
+			model := strings.TrimSpace(match[3])
+			return &StatuslineFromPane{
+				Model:      model,
+				ContextPct: ctxPct,
+				CostUSD:    cost,
+			}
 		}
 	}
 	return nil
@@ -261,8 +262,14 @@ type StatuslineFromPane struct {
 	LinesRemoved int
 }
 
-// statuslineRegex matches Claude Code's statusline: [Model] XX% ctx | $X.XX | +N -N
-var statuslineRegex = regexp.MustCompile(`\[([^\]]+)\]\s+(\d+)%\s+ctx\s+\|\s+\$([0-9.]+)\s+\|\s+(\+\d+\s+-\d+)`)
+// statuslineRegex matches the new statusline format (ANSI stripped):
+// ➜  dirname git:(branch) [ctx: XX%] +N -N $X.XXXX  model
+var statuslineRegex = regexp.MustCompile(`➜\s+\S+\s+(?:git:\([^)]+\)\s+)?\[ctx:\s+(\d+)%\]\s+\+(\d+)\s+-(\d+)\s+\$([0-9.]+)\s+(.+)`)
+
+// statuslineNoDiffRegex matches the statusline when there are no diff stats
+// (both added and removed are 0, so the script omits them):
+// ➜  dirname git:(branch) [ctx: XX%] $X.XXXX  model
+var statuslineNoDiffRegex = regexp.MustCompile(`➜\s+\S+\s+(?:git:\([^)]+\)\s+)?\[ctx:\s+(\d+)%\]\s+\$([0-9.]+)\s+(.+)`)
 
 func capturePane(paneID string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
