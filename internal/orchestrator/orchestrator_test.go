@@ -8,6 +8,7 @@ import (
 
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/git"
+	"github.com/simonbystrom/mastermind/internal/team"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 )
 
@@ -181,6 +182,7 @@ type mockTmux struct {
 	splitWindowErr     error
 	paneExistsResult   bool
 	windowIDForPane    string
+	listPanesResult    []string
 }
 
 func (m *mockTmux) record(call string) {
@@ -266,15 +268,16 @@ func (m *mockTmux) ListAllPanes(session string) (map[string]string, error) {
 
 func (m *mockTmux) ListPanesInWindow(windowID string) ([]string, error) {
 	m.record("ListPanesInWindow:" + windowID)
-	return nil, nil
+	return m.listPanesResult, nil
 }
 
 type mockMonitor struct {
 	mu    sync.Mutex
 	calls []string
 
-	paneStatus    tmux.PaneStatus
-	paneStatusErr error
+	paneStatus           tmux.PaneStatus
+	paneStatusErr        error
+	teammateNamesByPane  map[string]string // paneID → teammate name
 }
 
 func (m *mockMonitor) record(call string) {
@@ -290,6 +293,14 @@ func (m *mockMonitor) GetPaneStatus(paneID string) (tmux.PaneStatus, error) {
 
 func (m *mockMonitor) Remove(paneID string) {
 	m.record("Remove:" + paneID)
+}
+
+func (m *mockMonitor) ExtractTeammateName(paneID string) string {
+	m.record("ExtractTeammateName:" + paneID)
+	if m.teammateNamesByPane != nil {
+		return m.teammateNamesByPane[paneID]
+	}
+	return ""
 }
 
 // --- Helper ---
@@ -615,6 +626,131 @@ func TestCleanupDeadAgents(t *testing.T) {
 	}
 	if len(o.store.All()) != 0 {
 		t.Error("store should be empty after cleanup")
+	}
+}
+
+func TestDiscoverTeammatePanes_ContentBased(t *testing.T) {
+	mg := &mockGit{}
+	mt := &mockTmux{
+		windowIDForPane: "@1",
+		paneExistsResult: true,
+	}
+	// Configure ListPanesInWindow to return lead pane + 2 unknown panes
+	mt.listPanesResult = []string{"%1", "%2", "%3"}
+
+	mm := &mockMonitor{
+		teammateNamesByPane: map[string]string{
+			"%2": "code-quality",
+			"%3": "performance",
+		},
+	}
+	o := newTestOrch(t, mg, mt, mm)
+
+	// Create lead agent
+	lead := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
+	o.store.Add(lead)
+
+	ti := &team.TeamInfo{
+		Members: []team.Member{
+			{Name: "team-lead", AgentType: "lead"},
+			{Name: "code-quality", AgentType: "general-purpose"},
+			{Name: "performance", AgentType: "general-purpose"},
+		},
+	}
+
+	o.discoverTeammatePanes(lead, ti)
+
+	agents := o.store.All()
+	// Should have lead + 2 teammates
+	if len(agents) != 3 {
+		t.Fatalf("expected 3 agents, got %d", len(agents))
+	}
+
+	// Check teammate names are correctly assigned
+	namesSeen := map[string]bool{}
+	for _, a := range agents {
+		if a.IsTeammate() {
+			namesSeen[a.TeammateName] = true
+			if a.ParentID != lead.ID {
+				t.Errorf("teammate %q has wrong parent: %s", a.TeammateName, a.ParentID)
+			}
+		}
+	}
+	if !namesSeen["code-quality"] {
+		t.Error("missing teammate code-quality")
+	}
+	if !namesSeen["performance"] {
+		t.Error("missing teammate performance")
+	}
+}
+
+func TestDiscoverTeammatePanes_SkipsUnknownPanes(t *testing.T) {
+	mg := &mockGit{}
+	mt := &mockTmux{
+		windowIDForPane: "@1",
+		paneExistsResult: true,
+	}
+	// Lead pane + 2 unknown panes, but one has no valid @name
+	mt.listPanesResult = []string{"%1", "%2", "%3"}
+
+	mm := &mockMonitor{
+		teammateNamesByPane: map[string]string{
+			"%2": "code-quality",
+			"%3": "", // lazygit or shell — no @name
+		},
+	}
+	o := newTestOrch(t, mg, mt, mm)
+
+	lead := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
+	o.store.Add(lead)
+
+	ti := &team.TeamInfo{
+		Members: []team.Member{
+			{Name: "team-lead", AgentType: "lead"},
+			{Name: "code-quality", AgentType: "general-purpose"},
+		},
+	}
+
+	o.discoverTeammatePanes(lead, ti)
+
+	agents := o.store.All()
+	// Should have lead + 1 teammate (the shell pane is skipped)
+	if len(agents) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(agents))
+	}
+}
+
+func TestDiscoverTeammatePanes_SkipsNonMemberNames(t *testing.T) {
+	mg := &mockGit{}
+	mt := &mockTmux{
+		windowIDForPane: "@1",
+		paneExistsResult: true,
+	}
+	mt.listPanesResult = []string{"%1", "%2"}
+
+	mm := &mockMonitor{
+		teammateNamesByPane: map[string]string{
+			"%2": "unknown-agent", // not in team members
+		},
+	}
+	o := newTestOrch(t, mg, mt, mm)
+
+	lead := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
+	o.store.Add(lead)
+
+	ti := &team.TeamInfo{
+		Members: []team.Member{
+			{Name: "team-lead", AgentType: "lead"},
+			{Name: "code-quality", AgentType: "general-purpose"},
+		},
+	}
+
+	o.discoverTeammatePanes(lead, ti)
+
+	agents := o.store.All()
+	// Should only have lead (unknown-agent not in members)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
 	}
 }
 

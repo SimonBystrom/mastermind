@@ -19,6 +19,7 @@ type TmuxOps interface {
 type PaneStatusChecker interface {
 	GetPaneStatus(paneID string) (PaneStatus, error)
 	Remove(paneID string)
+	ExtractTeammateName(paneID string) string
 }
 
 // RealTmux delegates to the package-level functions.

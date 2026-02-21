@@ -38,6 +38,22 @@ func (sf *StatusFile) IsStale() bool {
 // Returns nil, nil if the file does not exist.
 func ReadStatus(worktreePath string) (*StatusFile, error) {
 	path := filepath.Join(worktreePath, statusFileName)
+	return readStatusFile(path)
+}
+
+// ReadTeammateStatus reads the per-teammate status file .mastermind-teammate-{name}
+// from the given worktree path. Returns nil, nil if the file does not exist.
+func ReadTeammateStatus(worktreePath, teammateName string) (*StatusFile, error) {
+	path := filepath.Join(worktreePath, teammateStatusFileName(teammateName))
+	return readStatusFile(path)
+}
+
+// teammateStatusFileName returns the filename for a teammate's status file.
+func teammateStatusFileName(name string) string {
+	return ".mastermind-teammate-" + name
+}
+
+func readStatusFile(path string) (*StatusFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

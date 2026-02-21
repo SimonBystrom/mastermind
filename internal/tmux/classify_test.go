@@ -191,6 +191,146 @@ func TestHashContent(t *testing.T) {
 	}
 }
 
+func TestExtractTeammateNameFromContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "basic teammate name",
+			content: "Some output\n@code-quality\nMore output\n",
+			want:    "code-quality",
+		},
+		{
+			name:    "teammate name in status line",
+			content: "Working on task...\n@performance\n[Sonnet 4.6] 46% ctx | $0.73 | +10 -5\n",
+			want:    "performance",
+		},
+		{
+			name:    "teammate name with digits",
+			content: "Output\n@worker-2\nMore\n",
+			want:    "worker-2",
+		},
+		{
+			name:    "no teammate name",
+			content: "Regular output without any labels\nJust text\n",
+			want:    "",
+		},
+		{
+			name:    "empty content",
+			content: "",
+			want:    "",
+		},
+		{
+			name:    "docs-security name",
+			content: "Analyzing files...\n@docs-security\nRunning checks\n",
+			want:    "docs-security",
+		},
+		{
+			name:    "single char name not matched",
+			content: "@x should not match single char\n",
+			want:    "",
+		},
+		{
+			name:    "email address not matched as name",
+			content: "Contact test@example.com for help\n",
+			want:    "example",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractTeammateNameFromContent(tt.content)
+			if got != tt.want {
+				t.Errorf("ExtractTeammateNameFromContent() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseStatuslineFromContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    *StatuslineFromPane
+	}{
+		{
+			name:    "full statusline",
+			content: "Some output\n[Sonnet 4.6] 46% ctx | $0.73 | +10 -5\n",
+			want: &StatuslineFromPane{
+				Model:        "Sonnet 4.6",
+				ContextPct:   46,
+				CostUSD:      0.73,
+				LinesAdded:   10,
+				LinesRemoved: 5,
+			},
+		},
+		{
+			name:    "statusline with zero lines",
+			content: "Output\n[Opus 4.6] 12% ctx | $1.50 | +0 -0\n",
+			want: &StatuslineFromPane{
+				Model:        "Opus 4.6",
+				ContextPct:   12,
+				CostUSD:      1.50,
+				LinesAdded:   0,
+				LinesRemoved: 0,
+			},
+		},
+		{
+			name:    "no statusline",
+			content: "Regular output\nNo statusline here\n",
+			want:    nil,
+		},
+		{
+			name:    "empty content",
+			content: "",
+			want:    nil,
+		},
+		{
+			name:    "statusline among other content",
+			content: "Building project...\nCompiling files...\n[Haiku 4.5] 88% ctx | $0.05 | +100 -50\nfor shortcuts\n",
+			want: &StatuslineFromPane{
+				Model:        "Haiku 4.5",
+				ContextPct:   88,
+				CostUSD:      0.05,
+				LinesAdded:   100,
+				LinesRemoved: 50,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseStatuslineFromContent(tt.content)
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("expected nil, got %+v", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("expected non-nil result")
+			}
+			if got.Model != tt.want.Model {
+				t.Errorf("Model = %q, want %q", got.Model, tt.want.Model)
+			}
+			if got.ContextPct != tt.want.ContextPct {
+				t.Errorf("ContextPct = %v, want %v", got.ContextPct, tt.want.ContextPct)
+			}
+			if got.CostUSD != tt.want.CostUSD {
+				t.Errorf("CostUSD = %v, want %v", got.CostUSD, tt.want.CostUSD)
+			}
+			if got.LinesAdded != tt.want.LinesAdded {
+				t.Errorf("LinesAdded = %d, want %d", got.LinesAdded, tt.want.LinesAdded)
+			}
+			if got.LinesRemoved != tt.want.LinesRemoved {
+				t.Errorf("LinesRemoved = %d, want %d", got.LinesRemoved, tt.want.LinesRemoved)
+			}
+		})
+	}
+}
+
 func TestPaneMonitor_Remove(t *testing.T) {
 	m := NewPaneMonitor()
 

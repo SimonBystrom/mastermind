@@ -58,6 +58,58 @@ func TestReadStatus(t *testing.T) {
 	})
 }
 
+func TestReadTeammateStatus(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("file does not exist", func(t *testing.T) {
+		sf, err := ReadTeammateStatus(dir, "worker")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sf != nil {
+			t.Fatal("expected nil status for missing file")
+		}
+	})
+
+	t.Run("valid teammate status file", func(t *testing.T) {
+		ts := time.Now().Unix()
+		data, _ := json.Marshal(StatusFile{Status: "idle", Timestamp: ts})
+		if err := os.WriteFile(filepath.Join(dir, ".mastermind-teammate-worker"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		sf, err := ReadTeammateStatus(dir, "worker")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sf == nil {
+			t.Fatal("expected non-nil status")
+		}
+		if sf.Status != "idle" {
+			t.Errorf("got status %q, want %q", sf.Status, "idle")
+		}
+	})
+
+	t.Run("task_completed status", func(t *testing.T) {
+		ts := time.Now().Unix()
+		data, _ := json.Marshal(StatusFile{Status: "task_completed", Timestamp: ts})
+		if err := os.WriteFile(filepath.Join(dir, ".mastermind-teammate-implementer"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		sf, err := ReadTeammateStatus(dir, "implementer")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sf == nil {
+			t.Fatal("expected non-nil status")
+		}
+		if sf.Status != "task_completed" {
+			t.Errorf("got status %q, want %q", sf.Status, "task_completed")
+		}
+	})
+}
+
 func TestStatusFile_IsStale(t *testing.T) {
 	t.Run("fresh", func(t *testing.T) {
 		sf := &StatusFile{Status: StatusRunning, Timestamp: time.Now().Unix()}

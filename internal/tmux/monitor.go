@@ -212,6 +212,78 @@ func detectNumberedList(bottomLines []string) bool {
 	return summaryVerbs < numbered/2
 }
 
+// ExtractTeammateName captures the pane content and looks for a @teammate-name
+// label rendered by Claude Code. Returns the extracted name or empty string.
+func (m *PaneMonitor) ExtractTeammateName(paneID string) string {
+	content := capturePane(paneID)
+	return ExtractTeammateNameFromContent(content)
+}
+
+// ExtractTeammateNameFromContent extracts a @teammate-name label from raw pane
+// content text. Returns the name (without @) or empty string if not found.
+func ExtractTeammateNameFromContent(content string) string {
+	if content == "" {
+		return ""
+	}
+	match := TeammateNamePattern.FindStringSubmatch(content)
+	if len(match) < 2 {
+		return ""
+	}
+	return match[1]
+}
+
+// ParseStatuslineFromContent extracts Claude Code statusline data from raw pane
+// content. The statusline format is: [Model Name] XX% ctx | $X.XX | +N -N
+func ParseStatuslineFromContent(content string) *StatuslineFromPane {
+	if content == "" {
+		return nil
+	}
+	lines := strings.Split(content, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		match := statuslineRegex.FindStringSubmatch(line)
+		if len(match) < 5 {
+			continue
+		}
+		model := match[1]
+		ctxPct, _ := strconv.ParseFloat(match[2], 64)
+		cost, _ := strconv.ParseFloat(match[3], 64)
+
+		// Parse lines changed: "+N -N"
+		linesChanged := match[4]
+		var linesAdded, linesRemoved int
+		parts := strings.Fields(linesChanged)
+		for _, p := range parts {
+			if strings.HasPrefix(p, "+") {
+				linesAdded, _ = strconv.Atoi(p[1:])
+			} else if strings.HasPrefix(p, "-") {
+				linesRemoved, _ = strconv.Atoi(p[1:])
+			}
+		}
+
+		return &StatuslineFromPane{
+			Model:        model,
+			ContextPct:   ctxPct,
+			CostUSD:      cost,
+			LinesAdded:   linesAdded,
+			LinesRemoved: linesRemoved,
+		}
+	}
+	return nil
+}
+
+// StatuslineFromPane holds statusline data parsed from pane content.
+type StatuslineFromPane struct {
+	Model        string
+	ContextPct   float64
+	CostUSD      float64
+	LinesAdded   int
+	LinesRemoved int
+}
+
+// statuslineRegex matches Claude Code's statusline: [Model] XX% ctx | $X.XX | +N -N
+var statuslineRegex = regexp.MustCompile(`\[([^\]]+)\]\s+(\d+)%\s+ctx\s+\|\s+\$([0-9.]+)\s+\|\s+(\+\d+\s+-\d+)`)
+
 func capturePane(paneID string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

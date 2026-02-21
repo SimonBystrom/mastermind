@@ -403,7 +403,12 @@ func (o *Orchestrator) StartMonitor() {
 			}
 
 			// Try hook-based status detection first (skip for teammates — they share the same hook file)
-			if !a.IsTeammate() && o.handleHookStatus(a, status) {
+			if a.IsTeammate() {
+				// Teammates use per-teammate status files
+				if o.handleTeammateHookStatus(a, status) {
+					continue
+				}
+			} else if o.handleHookStatus(a, status) {
 				// Read statusline sidecar file for lead agents
 				if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
 					a.SetStatuslineData(sd)
@@ -440,7 +445,19 @@ func (o *Orchestrator) StartMonitor() {
 			}
 
 			// Read statusline sidecar file (skip for teammates — they share the same file)
-			if !a.IsTeammate() {
+			if a.IsTeammate() {
+				// Parse statusline from pane content for teammates
+				if sfp := tmux.ParseStatuslineFromContent(captureTeammatePane(o, a)); sfp != nil {
+					a.SetStatuslineData(&agent.StatuslineData{
+						Model:        sfp.Model,
+						CostUSD:      sfp.CostUSD,
+						ContextPct:   sfp.ContextPct,
+						LinesAdded:   sfp.LinesAdded,
+						LinesRemoved: sfp.LinesRemoved,
+					})
+					o.store.MarkDirty()
+				}
+			} else {
 				if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
 					a.SetStatuslineData(sd)
 					o.store.MarkDirty()
@@ -522,11 +539,30 @@ func (o *Orchestrator) discoverTeammatePanes(lead *agent.Agent, ti *team.TeamInf
 		}
 	}
 
-	// Register each unknown pane as a teammate agent
-	for i, paneID := range unknownPanes {
-		name := ""
-		if i < len(teammateNames) {
-			name = teammateNames[i]
+	// Build set of valid teammate names for cross-referencing
+	teammateNameSet := make(map[string]bool, len(teammateNames))
+	for _, n := range teammateNames {
+		teammateNameSet[n] = true
+	}
+
+	// Register unknown panes as teammates only if content-based identification succeeds
+	for _, paneID := range unknownPanes {
+		name := o.monitor.ExtractTeammateName(paneID)
+		if name == "" || !teammateNameSet[name] {
+			// Skip panes where no valid @name is found (lazygit, shells, etc.)
+			continue
+		}
+
+		// Check we don't already have a teammate with this name
+		duplicate := false
+		for _, a := range o.store.All() {
+			if a.ParentID == lead.ID && a.TeammateName == name {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
+			continue
 		}
 
 		ta := agent.NewAgent(lead.Branch, lead.BaseBranch, lead.WorktreePath, lead.TmuxWindow, paneID)
@@ -595,6 +631,52 @@ func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) boo
 	}
 
 	return true
+}
+
+// handleTeammateHookStatus reads the per-teammate hook status file and updates
+// state accordingly. Returns true if hook status was available and handled.
+func (o *Orchestrator) handleTeammateHookStatus(a *agent.Agent, status agent.Status) bool {
+	if a.TeammateName == "" {
+		return false
+	}
+	sf, err := hook.ReadTeammateStatus(a.WorktreePath, a.TeammateName)
+	if err != nil {
+		slog.Debug("teammate hook status read error", "id", a.ID, "name", a.TeammateName, "error", err)
+		return false
+	}
+	if sf == nil || sf.IsStale() {
+		return false
+	}
+
+	switch sf.Status {
+	case hook.StatusRunning:
+		a.SetEverActive(true)
+		if status != agent.StatusRunning {
+			a.SetStatus(agent.StatusRunning)
+			a.SetWaitingFor("")
+			o.store.MarkDirty()
+			slog.Debug("teammate status change (hook)", "id", a.ID, "name", a.TeammateName, "status", "running")
+		}
+	case "idle", "task_completed":
+		if a.GetEverActive() {
+			o.handleAgentIdle(a)
+		}
+	default:
+		return false
+	}
+
+	return true
+}
+
+// captureTeammatePane captures the tmux pane content for a teammate agent.
+func captureTeammatePane(o *Orchestrator, a *agent.Agent) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "tmux", "capture-pane", "-t", a.TmuxPaneID, "-p").Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {

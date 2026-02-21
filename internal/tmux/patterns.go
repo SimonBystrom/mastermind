@@ -1,5 +1,7 @@
 package tmux
 
+import "regexp"
+
 // PatternRule defines a single pattern for classifying pane content.
 type PatternRule struct {
 	Contains     string // Required substring
@@ -32,6 +34,11 @@ type PaneStatus struct {
 	WaitingFor      string // "permission", "input", "unknown", or "" (working)
 	HasNumberedList bool   // bottom of pane contains numbered options (1. X  2. Y  3. Z)
 }
+
+// TeammateNamePattern matches the @teammate-name label rendered by Claude Code
+// in pane content. The label appears as "@name" where name consists of
+// lowercase letters, digits, and hyphens.
+var TeammateNamePattern = regexp.MustCompile(`@([a-z][a-z0-9-]*[a-z0-9])`)
 
 // DefaultPatterns contains the default detection patterns for Claude Code.
 var DefaultPatterns = MonitorPatterns{

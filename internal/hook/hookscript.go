@@ -46,6 +46,22 @@ case "$EVENT" in
   SessionEnd)
     STATUS="stopped"
     ;;
+  TeammateIdle|TaskCompleted)
+    # Per-teammate status: write to .mastermind-teammate-{name}
+    TEAMMATE_NAME=$(echo "$INPUT" | grep -o '"teammate_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"teammate_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+    if [ -n "$TEAMMATE_NAME" ]; then
+      TS=$(date +%s)
+      case "$EVENT" in
+        TeammateIdle) TM_STATUS="idle" ;;
+        TaskCompleted) TM_STATUS="task_completed" ;;
+      esac
+      TM_STATUS_FILE="${CLAUDE_WORKING_DIRECTORY:-.}/.mastermind-teammate-${TEAMMATE_NAME}"
+      TM_TMP_FILE=$(mktemp "${TM_STATUS_FILE}.XXXXXX")
+      printf '{"status":"%s","ts":%s}\n' "$TM_STATUS" "$TS" > "$TM_TMP_FILE"
+      mv "$TM_TMP_FILE" "$TM_STATUS_FILE"
+    fi
+    exit 0
+    ;;
   *)
     # Unknown event, ignore
     exit 0
@@ -96,6 +112,16 @@ var settingsJSON = map[string]interface{}{
 			}},
 		},
 		"SessionEnd": []map[string]interface{}{
+			{"hooks": []map[string]interface{}{
+				{"type": "command", "command": `"$CLAUDE_PROJECT_DIR"/.claude/hooks/mastermind-status.sh`},
+			}},
+		},
+		"TeammateIdle": []map[string]interface{}{
+			{"hooks": []map[string]interface{}{
+				{"type": "command", "command": `"$CLAUDE_PROJECT_DIR"/.claude/hooks/mastermind-status.sh`},
+			}},
+		},
+		"TaskCompleted": []map[string]interface{}{
 			{"hooks": []map[string]interface{}{
 				{"type": "command", "command": `"$CLAUDE_PROJECT_DIR"/.claude/hooks/mastermind-status.sh`},
 			}},
