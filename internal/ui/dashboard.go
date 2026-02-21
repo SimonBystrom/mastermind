@@ -541,34 +541,12 @@ func (m dashboardModel) ViewContent() string {
 
 			isSelected := i == m.cursor
 
-			// For selected rows, use plain text to avoid ANSI resets from
-			// inner lipgloss styles breaking the outer background highlight.
+			// For selected rows, keep status colors but strip indicators.
 			displayStatus := styledStatus
 			displayCtx := ctxPctStr
 			displayIndicator := indicator
 			if isSelected {
-				// Plain status text
-				plainStatus := string(status)
-				switch {
-				case status == agent.StatusWaiting && waitingFor == "permission":
-					plainStatus = "permission"
-				case status == agent.StatusWaiting && waitingFor == "unknown":
-					plainStatus = "attention?"
-				case status == agent.StatusWaiting:
-					plainStatus = "waiting"
-				case status == agent.StatusReviewReady:
-					plainStatus = "review ready"
-				case status == agent.StatusReviewing:
-					plainStatus = "reviewing"
-				case status == agent.StatusReviewed:
-					plainStatus = "reviewed"
-				case status == agent.StatusPreviewing:
-					plainStatus = "previewing"
-				case status == agent.StatusConflicts:
-					plainStatus = "conflicts"
-				}
-				displayStatus = plainStatus
-				if w := len(displayStatus); w < colW[3] {
+				if w := lipgloss.Width(displayStatus); w < colW[3] {
 					displayStatus += strings.Repeat(" ", colW[3]-w)
 				}
 				if w := len(displayCtx); w < colW[6] {
