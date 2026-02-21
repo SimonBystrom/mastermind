@@ -209,6 +209,11 @@ func (o *Orchestrator) DismissAgent(id string, deleteBranch bool) error {
 		return fmt.Errorf("agent %s not found", id)
 	}
 
+	// Teammate agents share their parent's window/worktree and can't be dismissed independently
+	if a.IsTeammate() {
+		return fmt.Errorf("cannot dismiss teammate agent %s — dismiss the team lead instead", id)
+	}
+
 	if a.TmuxPaneID != "" {
 		o.monitor.Remove(a.TmuxPaneID)
 	}
@@ -247,6 +252,15 @@ func (o *Orchestrator) DismissAgent(id string, deleteBranch bool) error {
 	if deleteBranch && a.Branch != "" {
 		if err := o.git.DeleteBranch(o.repoPath, a.Branch); err != nil {
 			slog.Warn("failed to delete branch", "id", id, "branch", a.Branch, "error", err)
+		}
+	}
+
+	// Remove any teammate agents that belong to this agent
+	for _, ta := range o.store.All() {
+		if ta.ParentID == id {
+			o.monitor.Remove(ta.TmuxPaneID)
+			o.store.Remove(ta.ID)
+			slog.Info("removed teammate with dismissed lead", "teammate", ta.ID, "lead", id)
 		}
 	}
 
@@ -369,8 +383,12 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 
-			// Try hook-based status detection first
-			if o.handleHookStatus(a, status) {
+			// Try hook-based status detection first (skip for teammates — they share the same hook file)
+			if !a.IsTeammate() && o.handleHookStatus(a, status) {
+				// Read statusline sidecar file for lead agents
+				if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
+					a.SetStatuslineData(sd)
+				}
 				continue
 			}
 
@@ -400,15 +418,17 @@ func (o *Orchestrator) StartMonitor() {
 				o.handleAgentIdle(a)
 			}
 
-			// Read statusline sidecar file for this agent
-			if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
-				a.SetStatuslineData(sd)
+			// Read statusline sidecar file (skip for teammates — they share the same file)
+			if !a.IsTeammate() {
+				if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
+					a.SetStatuslineData(sd)
+				}
 			}
 		}
 
-		// Read agent team data
+		// Read agent team data and discover teammate panes
 		for _, a := range agents {
-			if a.GetStatus() == agent.StatusDismissed {
+			if a.GetStatus() == agent.StatusDismissed || a.IsTeammate() {
 				continue
 			}
 			sd := a.GetStatuslineData()
@@ -421,9 +441,73 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 			a.SetTeamInfo(ti) // nil clears stale data
+
+			// Discover teammate panes in the lead agent's tmux window
+			if ti != nil && len(ti.Members) > 1 {
+				o.discoverTeammatePanes(a, ti)
+			}
 		}
 
 		o.saveState()
+	}
+}
+
+// discoverTeammatePanes finds new tmux panes created by Claude Code for team
+// members and registers them as lightweight teammate agents in the store.
+func (o *Orchestrator) discoverTeammatePanes(lead *agent.Agent, ti *team.TeamInfo) {
+	allPanes, err := o.tmux.ListPanesInWindow(lead.TmuxWindow)
+	if err != nil {
+		slog.Debug("failed to list panes for teammate discovery", "id", lead.ID, "error", err)
+		return
+	}
+
+	// Build set of known pane IDs in this window
+	knownPanes := map[string]bool{
+		lead.TmuxPaneID: true,
+	}
+	if lgPane := lead.GetLazygitPaneID(); lgPane != "" {
+		knownPanes[lgPane] = true
+	}
+
+	// Also exclude panes already tracked as teammates
+	for _, a := range o.store.All() {
+		if a.ParentID == lead.ID {
+			knownPanes[a.TmuxPaneID] = true
+		}
+	}
+
+	// Collect unknown panes
+	var unknownPanes []string
+	for _, pane := range allPanes {
+		if !knownPanes[pane] {
+			unknownPanes = append(unknownPanes, pane)
+		}
+	}
+
+	if len(unknownPanes) == 0 {
+		return
+	}
+
+	// Build list of teammate member names (exclude the lead)
+	var teammateNames []string
+	for _, m := range ti.Members {
+		if m.AgentType != "lead" {
+			teammateNames = append(teammateNames, m.Name)
+		}
+	}
+
+	// Register each unknown pane as a teammate agent
+	for i, paneID := range unknownPanes {
+		name := ""
+		if i < len(teammateNames) {
+			name = teammateNames[i]
+		}
+
+		ta := agent.NewAgent(lead.Branch, lead.BaseBranch, lead.WorktreePath, lead.TmuxWindow, paneID)
+		ta.ParentID = lead.ID
+		ta.TeammateName = name
+		o.store.Add(ta)
+		slog.Info("discovered teammate pane", "parent", lead.ID, "pane", paneID, "name", name)
 	}
 }
 
@@ -489,6 +573,16 @@ func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) boo
 func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 	a.SetFinished(exitCode, time.Now())
 
+	// Teammates don't have their own worktree — just mark as done
+	if a.IsTeammate() {
+		a.SetStatus(agent.StatusDone)
+		slog.Info("teammate finished", "id", a.ID, "parent", a.ParentID, "exitCode", exitCode)
+		if o.program != nil {
+			o.program.Send(AgentFinishedMsg{AgentID: a.ID, ExitCode: exitCode})
+		}
+		return
+	}
+
 	hasChanges := o.git.HasChanges(a.WorktreePath)
 	if hasChanges {
 		a.SetStatus(agent.StatusReviewReady)
@@ -508,6 +602,19 @@ func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 }
 
 func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
+	// Teammates don't have their own worktree — just mark as done
+	if a.IsTeammate() {
+		if a.GetStatus() != agent.StatusDone {
+			a.SetStatus(agent.StatusDone)
+			a.SetFinished(0, time.Now())
+			slog.Info("teammate idle", "id", a.ID, "parent", a.ParentID)
+			if o.program != nil {
+				o.program.Send(AgentFinishedMsg{AgentID: a.ID})
+			}
+		}
+		return
+	}
+
 	// Don't overwrite reviewed status — it must stick until merge or manual change
 	if a.GetStatus() == agent.StatusReviewed {
 		return
@@ -977,6 +1084,8 @@ func (o *Orchestrator) RecoverAgents() {
 			TmuxWindow:   pa.TmuxWindow,
 			TmuxPaneID:   pa.TmuxPaneID,
 			StartedAt:    pa.StartedAt,
+			ParentID:     pa.ParentID,
+			TeammateName: pa.TeammateName,
 		}
 		a.SetStatus(pa.Status)
 		a.SetWaitingFor(pa.WaitingFor)

@@ -11,6 +11,7 @@ type TmuxOps interface {
 	SelectPane(paneID string) error
 	PaneExistsInWindow(paneID, windowID string) bool
 	WindowIDForPane(paneID string) (string, error)
+	ListPanesInWindow(windowID string) ([]string, error)
 }
 
 // PaneStatusChecker abstracts pane monitoring for testing.
@@ -56,4 +57,8 @@ func (RealTmux) PaneExistsInWindow(paneID, windowID string) bool {
 
 func (RealTmux) WindowIDForPane(paneID string) (string, error) {
 	return WindowIDForPane(paneID)
+}
+
+func (RealTmux) ListPanesInWindow(windowID string) ([]string, error) {
+	return ListPanesInWindow(windowID)
 }

@@ -259,6 +259,11 @@ func (m *mockTmux) WindowIDForPane(paneID string) (string, error) {
 	return m.windowIDForPane, nil
 }
 
+func (m *mockTmux) ListPanesInWindow(windowID string) ([]string, error) {
+	m.record("ListPanesInWindow:" + windowID)
+	return nil, nil
+}
+
 type mockMonitor struct {
 	mu    sync.Mutex
 	calls []string

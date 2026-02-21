@@ -108,6 +108,22 @@ func PaneExistsInWindow(paneID, windowID string) bool {
 	return false
 }
 
+// ListPanesInWindow returns all pane IDs in the given window.
+func ListPanesInWindow(windowID string) ([]string, error) {
+	out, err := exec.Command("tmux", "list-panes", "-t", windowID, "-F", "#{pane_id}").Output()
+	if err != nil {
+		return nil, fmt.Errorf("list panes in window %s: %w", windowID, err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	var panes []string
+	for _, line := range lines {
+		if id := strings.TrimSpace(line); id != "" {
+			panes = append(panes, id)
+		}
+	}
+	return panes, nil
+}
+
 // WindowIDForPane returns the window ID that contains the given pane.
 func WindowIDForPane(paneID string) (string, error) {
 	out, err := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{window_id}").Output()

@@ -31,6 +31,10 @@ type Agent struct {
 	TmuxPaneID   string
 	StartedAt    time.Time
 
+	// Team teammate fields (immutable once set)
+	ParentID     string // non-empty if this is a teammate agent (points to team lead agent ID)
+	TeammateName string // name from the team config (e.g., "code-quality")
+
 	// Mutable fields (protected by mu)
 	mu              sync.RWMutex
 	status          Status
@@ -68,6 +72,11 @@ func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *
 		status:           StatusRunning,
 		runningStartedAt: now, // starts in running state
 	}
+}
+
+// IsTeammate returns true if this agent is a teammate (sub-agent of a team lead).
+func (a *Agent) IsTeammate() bool {
+	return a.ParentID != ""
 }
 
 func (a *Agent) GetStatus() Status {
