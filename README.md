@@ -22,27 +22,17 @@ Orchestrate multiple [Claude Code](https://docs.anthropic.com/en/docs/claude-cod
 
 Each agent runs in its own tmux window on a separate git worktree/branch, so multiple Claude instances can work on different tasks simultaneously without conflicting.
 
-## Quick Install
+## Install
 
-**Go install** (requires Go 1.26+):
-
-```bash
-go install github.com/simonbystrom/mastermind@latest
-```
-
-**Install script** (macOS / Linux):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/simonbystrom/mastermind/main/install.sh | sh
-```
-
-**Build from source:**
+Requires **Go 1.26+**.
 
 ```bash
 git clone https://github.com/simonbystrom/mastermind.git
 cd mastermind
 make install
 ```
+
+This builds the binary and installs it to `/usr/local/bin`.
 
 ## Prerequisites
 
@@ -183,11 +173,9 @@ Agent state is persisted to `.worktrees/mastermind-state.json` and agents are re
 ## Uninstall
 
 ```bash
-sudo rm /usr/local/bin/mastermind
+make uninstall
 rm -rf ~/.config/mastermind
 ```
-
-If installed via `go install`, the binary is in `$GOBIN` (or `$GOPATH/bin`).
 
 ## License
 
