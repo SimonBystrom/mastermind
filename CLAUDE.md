@@ -19,6 +19,7 @@ Mastermind is a Go CLI tool that orchestrates multiple Claude Code agents in par
 
 - **Go 1.26** — module path `github.com/simonbystrom/mastermind`
 - **Required runtime dependencies:** tmux 3.0+, git, claude (Claude Code CLI), lazygit, jq
+- **Optional dev dependency:** goreleaser (for `make snapshot` local release testing)
 
 ## Architecture
 

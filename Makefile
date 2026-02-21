@@ -1,9 +1,8 @@
 VERSION ?= dev
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 BINARY  := mastermind
-TARGETS := darwin-arm64 darwin-amd64 linux-arm64 linux-amd64
 
-.PHONY: build clean run test install uninstall release
+.PHONY: build clean run test install uninstall snapshot
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) .
@@ -27,14 +26,5 @@ install: build
 uninstall:
 	rm -f /usr/local/bin/$(BINARY)
 
-release: clean
-	@mkdir -p dist
-	@for target in $(TARGETS); do \
-		os=$${target%%-*}; \
-		arch=$${target##*-}; \
-		echo "Building $$os/$$arch..."; \
-		GOOS=$$os GOARCH=$$arch go build $(LDFLAGS) -o dist/$(BINARY) . && \
-		tar -czf dist/$(BINARY)-$(VERSION)-$$os-$$arch.tar.gz -C dist $(BINARY) && \
-		rm -f dist/$(BINARY); \
-	done
-	@echo "Release artifacts in dist/"
+snapshot:
+	goreleaser release --snapshot --clean

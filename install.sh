@@ -37,21 +37,45 @@ esac
 
 # Get latest release tag
 echo "Fetching latest release..."
-TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed 's/.*"tag_name": *"//;s/".*//')"
+TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
 if [ -z "$TAG" ]; then
   echo "Error: could not determine latest release" >&2
   exit 1
 fi
 echo "Latest release: $TAG"
 
-# Download tarball
-URL="https://github.com/${REPO}/releases/download/${TAG}/${BINARY}-${TAG}-${OS}-${ARCH}.tar.gz"
+ARCHIVE="${BINARY}-${TAG}-${OS}-${ARCH}.tar.gz"
+CHECKSUM_FILE="checksums.txt"
+BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
-echo "Downloading ${BINARY}-${TAG}-${OS}-${ARCH}.tar.gz..."
-curl -fsSL "$URL" -o "$TMPDIR/$BINARY.tar.gz"
-tar -xzf "$TMPDIR/$BINARY.tar.gz" -C "$TMPDIR"
+# Download tarball and checksums
+echo "Downloading ${ARCHIVE}..."
+curl -fsSL "${BASE_URL}/${ARCHIVE}" -o "$TMPDIR/${ARCHIVE}"
+curl -fsSL "${BASE_URL}/${CHECKSUM_FILE}" -o "$TMPDIR/${CHECKSUM_FILE}"
+
+# Verify checksum
+EXPECTED="$(grep "${ARCHIVE}" "$TMPDIR/${CHECKSUM_FILE}" | cut -d ' ' -f 1)"
+if [ -z "$EXPECTED" ]; then
+  echo "Error: checksum not found for ${ARCHIVE}" >&2
+  exit 1
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL="$(sha256sum "$TMPDIR/${ARCHIVE}" | cut -d ' ' -f 1)"
+elif command -v shasum >/dev/null 2>&1; then
+  ACTUAL="$(shasum -a 256 "$TMPDIR/${ARCHIVE}" | cut -d ' ' -f 1)"
+else
+  echo "Warning: no sha256sum or shasum found, skipping checksum verification" >&2
+  ACTUAL="$EXPECTED"
+fi
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "Error: checksum mismatch (expected ${EXPECTED}, got ${ACTUAL})" >&2
+  exit 1
+fi
+echo "Checksum verified."
+
+tar -xzf "$TMPDIR/${ARCHIVE}" -C "$TMPDIR"
 
 # Install binary
 INSTALL_DIR="/usr/local/bin"
