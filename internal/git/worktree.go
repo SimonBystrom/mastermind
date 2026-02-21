@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,6 +60,7 @@ type Worktree struct {
 func HasChanges(wtPath string) bool {
 	out, err := exec.Command("git", "-C", wtPath, "status", "--porcelain").Output()
 	if err != nil {
+		slog.Warn("git status --porcelain failed", "path", wtPath, "error", err)
 		return false
 	}
 	return len(strings.TrimSpace(string(out))) > 0

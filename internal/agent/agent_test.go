@@ -188,6 +188,57 @@ func TestAgent_Duration_Finished(t *testing.T) {
 	}
 }
 
+func TestAgent_Snapshot(t *testing.T) {
+	a := NewAgent("feat/snap", "main", "/tmp/wt", "@1", "%0")
+	a.SetStatus(StatusWaiting)
+	a.SetWaitingFor("permission")
+	a.SetEverActive(true)
+	a.SetFinished(1, time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
+	a.SetLazygitPaneID("%5")
+	a.SetPreReviewCommit("abc123")
+
+	snap := a.Snapshot()
+
+	if snap.Status != StatusWaiting {
+		t.Errorf("Snapshot().Status = %q, want %q", snap.Status, StatusWaiting)
+	}
+	if snap.WaitingFor != "permission" {
+		t.Errorf("Snapshot().WaitingFor = %q, want %q", snap.WaitingFor, "permission")
+	}
+	if !snap.EverActive {
+		t.Error("Snapshot().EverActive should be true")
+	}
+	if snap.ExitCode != 1 {
+		t.Errorf("Snapshot().ExitCode = %d, want 1", snap.ExitCode)
+	}
+	if snap.FinishedAt.IsZero() {
+		t.Error("Snapshot().FinishedAt should not be zero")
+	}
+	if snap.LazygitPaneID != "%5" {
+		t.Errorf("Snapshot().LazygitPaneID = %q, want %%5", snap.LazygitPaneID)
+	}
+	if snap.PreReviewCommit != "abc123" {
+		t.Errorf("Snapshot().PreReviewCommit = %q, want %q", snap.PreReviewCommit, "abc123")
+	}
+}
+
+func TestAgent_SetFinished_OnlyOnce(t *testing.T) {
+	a := NewAgent("b", "main", "/wt", "@1", "%0")
+
+	first := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	second := time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	a.SetFinished(1, first)
+	a.SetFinished(2, second)
+
+	if got := a.GetExitCode(); got != 1 {
+		t.Errorf("GetExitCode() = %d after second SetFinished, want 1 (first call wins)", got)
+	}
+	if got := a.GetFinishedAt(); !got.Equal(first) {
+		t.Errorf("GetFinishedAt() = %v, want %v (first call wins)", got, first)
+	}
+}
+
 func TestAgent_ConcurrentAccess(t *testing.T) {
 	a := NewAgent("b", "main", "/wt", "@1", "%0")
 

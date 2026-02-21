@@ -32,6 +32,7 @@ type PersistedAgent struct {
 func SaveState(path string, agents []*Agent) error {
 	persisted := make([]PersistedAgent, len(agents))
 	for i, a := range agents {
+		snap := a.Snapshot()
 		persisted[i] = PersistedAgent{
 			ID:           a.ID,
 			Branch:       a.Branch,
@@ -39,16 +40,16 @@ func SaveState(path string, agents []*Agent) error {
 			WorktreePath: a.WorktreePath,
 			TmuxWindow:   a.TmuxWindow,
 			TmuxPaneID:   a.TmuxPaneID,
-			Status:       a.GetStatus(),
-			WaitingFor:   a.GetWaitingFor(),
-			EverActive:      a.GetEverActive(),
-			ExitCode:        a.GetExitCode(),
+			Status:       snap.Status,
+			WaitingFor:   snap.WaitingFor,
+			EverActive:      snap.EverActive,
+			ExitCode:        snap.ExitCode,
 			StartedAt:       a.StartedAt,
-			FinishedAt:      a.GetFinishedAt(),
-			LazygitPaneID:       a.GetLazygitPaneID(),
-			PreReviewCommit:     a.GetPreReviewCommit(),
-			AccumulatedDuration: a.GetAccumulatedDuration(),
-			RunningStartedAt:    a.GetRunningStartedAt(),
+			FinishedAt:      snap.FinishedAt,
+			LazygitPaneID:       snap.LazygitPaneID,
+			PreReviewCommit:     snap.PreReviewCommit,
+			AccumulatedDuration: snap.AccumulatedDuration,
+			RunningStartedAt:    snap.RunningStartedAt,
 		}
 		if ti := a.GetTeamInfo(); ti != nil {
 			persisted[i].TeamName = ti.TeamName

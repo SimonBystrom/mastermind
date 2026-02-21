@@ -135,6 +135,9 @@ func (a *Agent) GetFinishedAt() time.Time {
 func (a *Agent) SetFinished(exitCode int, t time.Time) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if !a.finishedAt.IsZero() {
+		return // first call wins
+	}
 	a.exitCode = exitCode
 	a.finishedAt = t
 }
@@ -213,14 +216,12 @@ func (a *Agent) SetTeamInfo(ti *team.TeamInfo) {
 
 func (a *Agent) Duration() time.Duration {
 	a.mu.RLock()
-	acc := a.accumulatedDuration
-	started := a.runningStartedAt
-	a.mu.RUnlock()
-	if !started.IsZero() {
+	defer a.mu.RUnlock()
+	if !a.runningStartedAt.IsZero() {
 		// Currently running: add live elapsed time.
-		return acc + time.Since(started)
+		return a.accumulatedDuration + time.Since(a.runningStartedAt)
 	}
-	return acc
+	return a.accumulatedDuration
 }
 
 func (a *Agent) GetAccumulatedDuration() time.Duration {
@@ -233,6 +234,36 @@ func (a *Agent) GetRunningStartedAt() time.Time {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.runningStartedAt
+}
+
+// AgentSnapshot holds a consistent point-in-time view of all mutable fields.
+type AgentSnapshot struct {
+	Status              Status
+	WaitingFor          string
+	EverActive          bool
+	ExitCode            int
+	FinishedAt          time.Time
+	LazygitPaneID       string
+	PreReviewCommit     string
+	AccumulatedDuration time.Duration
+	RunningStartedAt    time.Time
+}
+
+// Snapshot reads all mutable fields under a single lock acquisition.
+func (a *Agent) Snapshot() AgentSnapshot {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return AgentSnapshot{
+		Status:              a.status,
+		WaitingFor:          a.waitingFor,
+		EverActive:          a.everActive,
+		ExitCode:            a.exitCode,
+		FinishedAt:          a.finishedAt,
+		LazygitPaneID:       a.lazygitPaneID,
+		PreReviewCommit:     a.preReviewCommit,
+		AccumulatedDuration: a.accumulatedDuration,
+		RunningStartedAt:    a.runningStartedAt,
+	}
 }
 
 // SetDurationState restores duration tracking fields (used during recovery).
