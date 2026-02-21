@@ -24,10 +24,10 @@ Each agent runs in its own tmux window on a separate git worktree/branch, so mul
 
 ## Quick Install
 
-**Homebrew** (macOS):
+**Go install** (requires Go 1.26+):
 
 ```bash
-brew install simonbystrom/tap/mastermind
+go install github.com/simonbystrom/mastermind@latest
 ```
 
 **Install script** (macOS / Linux):
@@ -182,24 +182,12 @@ Agent state is persisted to `.worktrees/mastermind-state.json` and agents are re
 
 ## Uninstall
 
-**Homebrew:**
-
-```bash
-brew uninstall mastermind
-```
-
-**Install script / manual:**
-
 ```bash
 sudo rm /usr/local/bin/mastermind
 rm -rf ~/.config/mastermind
 ```
 
-**Build from source:**
-
-```bash
-make uninstall
-```
+If installed via `go install`, the binary is in `$GOBIN` (or `$GOPATH/bin`).
 
 ## License
 

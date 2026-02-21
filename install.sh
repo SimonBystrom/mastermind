@@ -5,6 +5,13 @@ set -e
 
 REPO="simonbystrom/mastermind"
 BINARY="mastermind"
+NO_DEPS=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --no-deps) NO_DEPS=1 ;;
+  esac
+done
 
 # Detect OS
 OS="$(uname -s)"
@@ -67,11 +74,32 @@ fi
 
 echo ""
 echo "mastermind $TAG installed to $INSTALL_DIR/$BINARY"
-echo ""
-echo "Prerequisites:"
-echo "  - tmux 3.0+   brew install tmux"
-echo "  - git          (likely already installed)"
-echo "  - claude       https://docs.anthropic.com/en/docs/claude-code"
-echo "  - lazygit      brew install lazygit"
+
+# Dependency check
+if [ "$NO_DEPS" -eq 0 ]; then
+  MISSING=""
+  for dep in git tmux lazygit jq; do
+    if ! command -v "$dep" >/dev/null 2>&1; then
+      MISSING="$MISSING $dep"
+    fi
+  done
+
+  CLAUDE_MISSING=0
+  if ! command -v claude >/dev/null 2>&1; then
+    CLAUDE_MISSING=1
+  fi
+
+  if [ -n "$MISSING" ] || [ "$CLAUDE_MISSING" -eq 1 ]; then
+    echo ""
+    echo "Missing dependencies:"
+    for dep in $MISSING; do
+      echo "  - $dep"
+    done
+    if [ "$CLAUDE_MISSING" -eq 1 ]; then
+      echo "  - claude  (npm install -g @anthropic-ai/claude-code)"
+    fi
+  fi
+fi
+
 echo ""
 echo "Run 'mastermind' inside a tmux session in any git repo to get started."
