@@ -35,6 +35,7 @@ type Colors struct {
 	Logo          string `toml:"logo"`
 	Previewing    string `toml:"previewing"`
 	PreviewBanner string `toml:"preview_banner"`
+	Team          string `toml:"team"`
 }
 
 // Layout holds pane sizing percentages.
@@ -78,6 +79,7 @@ func Default() Config {
 			Logo:          "#cba6f7", // Mauve
 			Previewing:    "#f5c2e7", // Pink
 			PreviewBanner: "#f5c2e7", // Pink
+			Team:          "#74c7ec", // Sapphire
 		},
 		Layout: Layout{
 			DashboardWidth: 55,
@@ -148,6 +150,7 @@ const defaultFileContent = `# Mastermind configuration
 # logo           = "#cba6f7"  # Mauve
 # previewing     = "#f5c2e7"  # Pink
 # preview_banner = "#f5c2e7"  # Pink
+# team           = "#74c7ec"  # Sapphire
 
 [layout]
 # dashboard_width = 55   # percentage of terminal width for left panel

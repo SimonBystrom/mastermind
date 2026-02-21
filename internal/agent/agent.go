@@ -3,6 +3,8 @@ package agent
 import (
 	"sync"
 	"time"
+
+	"github.com/simonbystrom/mastermind/internal/team"
 )
 
 type Status string
@@ -49,6 +51,9 @@ type Agent struct {
 
 	// Claude Code statusline data (read from sidecar file)
 	statuslineData *StatuslineData
+
+	// Agent team info (nil if not a team lead)
+	teamInfo *team.TeamInfo
 }
 
 func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
@@ -192,6 +197,18 @@ func (a *Agent) SetStatuslineData(sd *StatuslineData) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.statuslineData = sd
+}
+
+func (a *Agent) GetTeamInfo() *team.TeamInfo {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.teamInfo
+}
+
+func (a *Agent) SetTeamInfo(ti *team.TeamInfo) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.teamInfo = ti
 }
 
 func (a *Agent) Duration() time.Duration {

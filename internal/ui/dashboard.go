@@ -440,7 +440,7 @@ func (m dashboardModel) ViewContent() string {
 	type col struct {
 		min, weight int
 	}
-	cols := [8]col{
+	cols := [9]col{
 		{3, 1},  // 0: ID
 		{8, 2},  // 1: Model
 		{10, 3}, // 2: Branch
@@ -449,9 +449,10 @@ func (m dashboardModel) ViewContent() string {
 		{6, 1},  // 5: Cost
 		{4, 1},  // 6: Ctx%
 		{8, 2},  // 7: Lines
+		{8, 2},  // 8: Team
 	}
 	const indent = 2
-	const gaps = 8   // 1-char gap between each of 8 cols + indicator
+	const gaps = 9   // 1-char gap between each of 9 cols + indicator
 	const indic = 2  // indicator width
 	totalMin := indent + gaps + indic
 	totalWeight := 0
@@ -464,7 +465,7 @@ func (m dashboardModel) ViewContent() string {
 		extra = 0
 	}
 	// Compute actual widths
-	var colW [8]int
+	var colW [9]int
 	for i, c := range cols {
 		colW[i] = c.min + extra*c.weight/totalWeight
 	}
@@ -483,9 +484,9 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	} else {
 		// Header
-		header := fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+		header := fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
 			colW[0], "ID", colW[1], "Model", colW[2], "Branch", colW[3], "Status",
-			colW[4], "Duration", colW[5], "Cost", colW[6], "Ctx%", colW[7], "Lines")
+			colW[4], "Duration", colW[5], "Cost", colW[6], "Ctx%", colW[7], "Lines", colW[8], "Team")
 		b.WriteString(m.styles.Header.Render(header))
 		b.WriteString("\n")
 
@@ -543,6 +544,12 @@ func (m dashboardModel) ViewContent() string {
 				}
 			}
 
+			// Team data column
+			teamStr := ""
+			if ti := a.GetTeamInfo(); ti != nil {
+				teamStr = fmt.Sprintf("%da %d/%dt", ti.MemberCount, ti.CompletedTasks, ti.TotalTasks)
+			}
+
 			// Statusline data columns
 			modelStr := "-"
 			costStr := "-"
@@ -587,8 +594,17 @@ func (m dashboardModel) ViewContent() string {
 				}
 			}
 
+			// Style team string
+			displayTeam := teamStr
+			if !isSelected && teamStr != "" {
+				displayTeam = m.styles.Team.Render(teamStr)
+			}
+			if w := lipgloss.Width(displayTeam); w < colW[8] {
+				displayTeam += strings.Repeat(" ", colW[8]-w)
+			}
+
 			// Build the row content — gaps between all columns must match header
-			row := fmt.Sprintf("  %-*s %-*s %-*s %s %-*s %-*s %s %-*s %s",
+			row := fmt.Sprintf("  %-*s %-*s %-*s %s %-*s %-*s %s %-*s %s %s",
 				colW[0], a.ID,
 				colW[1], truncate(modelStr, colW[1]),
 				colW[2], truncate(a.Branch, colW[2]),
@@ -597,6 +613,7 @@ func (m dashboardModel) ViewContent() string {
 				colW[5], costStr,
 				displayCtx,
 				colW[7], linesStr,
+				displayTeam,
 				displayIndicator,
 			)
 

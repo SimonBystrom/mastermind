@@ -25,6 +25,7 @@ type PersistedAgent struct {
 	PreReviewCommit     string        `json:"pre_review_commit,omitempty"`
 	AccumulatedDuration time.Duration `json:"accumulated_duration"`
 	RunningStartedAt    time.Time     `json:"running_started_at"`
+	TeamName            string        `json:"team_name,omitempty"`
 }
 
 // SaveState atomically writes agent state to a JSON file.
@@ -48,6 +49,9 @@ func SaveState(path string, agents []*Agent) error {
 			PreReviewCommit:     a.GetPreReviewCommit(),
 			AccumulatedDuration: a.GetAccumulatedDuration(),
 			RunningStartedAt:    a.GetRunningStartedAt(),
+		}
+		if ti := a.GetTeamInfo(); ti != nil {
+			persisted[i].TeamName = ti.TeamName
 		}
 	}
 

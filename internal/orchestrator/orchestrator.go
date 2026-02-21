@@ -18,6 +18,7 @@ import (
 	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/git"
 	"github.com/simonbystrom/mastermind/internal/hook"
+	"github.com/simonbystrom/mastermind/internal/team"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 )
 
@@ -71,8 +72,9 @@ type Orchestrator struct {
 	program     *tea.Program
 	monitor     tmux.PaneStatusChecker
 	statePath   string
-	git         git.GitOps
-	tmux        tmux.TmuxOps
+	git          git.GitOps
+	tmux         tmux.TmuxOps
+	teamReader   team.TeamReader
 	lazygitSplit int
 
 	previewAgentID    string // ID of agent being previewed (empty = no preview)
@@ -105,6 +107,11 @@ func WithLazygitSplit(pct int) Option {
 	return func(o *Orchestrator) { o.lazygitSplit = pct }
 }
 
+// WithTeamReader overrides the default team reader.
+func WithTeamReader(tr team.TeamReader) Option {
+	return func(o *Orchestrator) { o.teamReader = tr }
+}
+
 func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
 		ctx:          ctx,
@@ -116,6 +123,7 @@ func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir
 		statePath:    worktreeDir + "/mastermind-state.json",
 		git:          git.RealGit{},
 		tmux:         tmux.RealTmux{},
+		teamReader:   team.NewReader(),
 		lazygitSplit: 80,
 	}
 	for _, opt := range opts {
@@ -379,6 +387,23 @@ func (o *Orchestrator) StartMonitor() {
 			if err == nil {
 				a.SetStatuslineData(sd)
 			}
+		}
+
+		// Read agent team data
+		for _, a := range agents {
+			if a.GetStatus() == agent.StatusDismissed {
+				continue
+			}
+			sd := a.GetStatuslineData()
+			if sd == nil || sd.SessionID == "" {
+				continue
+			}
+			ti, err := o.teamReader.FindTeamForSession(sd.SessionID)
+			if err != nil {
+				slog.Debug("team reader error", "id", a.ID, "error", err)
+				continue
+			}
+			a.SetTeamInfo(ti) // nil clears stale data
 		}
 
 		o.saveState()
@@ -965,6 +990,9 @@ func writeClaudeProjectSettings(wtPath string) error {
 		"statusLine": map[string]string{
 			"type":    "command",
 			"command": config.StatuslineScriptPath(),
+		},
+		"env": map[string]string{
+			"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
 		},
 	}
 
