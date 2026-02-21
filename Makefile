@@ -14,7 +14,7 @@ run: build
 	./$(BINARY)
 
 test:
-	@command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@latest
+	@command -v gotestsum >/dev/null 2>&1 || go install gotest.tools/gotestsum@v1.13.0
 	$(shell go env GOPATH)/bin/gotestsum --format testdox ./...
 
 install: build
