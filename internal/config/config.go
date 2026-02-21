@@ -44,10 +44,17 @@ type Layout struct {
 	LazygitSplit   int `toml:"lazygit_split"`
 }
 
+// Claude holds settings for Claude Code agent behavior.
+type Claude struct {
+	AgentTeams   bool   `toml:"agent_teams"`
+	TeammateMode string `toml:"teammate_mode"`
+}
+
 // Config is the top-level configuration.
 type Config struct {
 	Colors Colors `toml:"colors"`
 	Layout Layout `toml:"layout"`
+	Claude Claude `toml:"claude"`
 }
 
 // Default returns a Config populated with the current hardcoded defaults.
@@ -84,6 +91,10 @@ func Default() Config {
 		Layout: Layout{
 			DashboardWidth: 55,
 			LazygitSplit:   80,
+		},
+		Claude: Claude{
+			AgentTeams:   true,
+			TeammateMode: "in-process",
 		},
 	}
 }
@@ -155,6 +166,10 @@ const defaultFileContent = `# Mastermind configuration
 [layout]
 # dashboard_width = 55   # percentage of terminal width for left panel
 # lazygit_split   = 80   # percentage for lazygit pane size
+
+[claude]
+# agent_teams   = true   # enable Claude Code agent teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS)
+# teammate_mode = "in-process"  # teammate mode for agent team collaboration
 `
 
 // WriteDefault writes the default config file with all values commented out.

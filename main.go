@@ -127,6 +127,8 @@ func main() {
 	store := agent.NewStore()
 	orch := orchestrator.New(ctx, store, absRepo, *session, worktreeDir,
 		orchestrator.WithLazygitSplit(cfg.Layout.LazygitSplit),
+		orchestrator.WithAgentTeams(cfg.Claude.AgentTeams),
+		orchestrator.WithTeammateMode(cfg.Claude.TeammateMode),
 	)
 
 	// Recover agents from previous session

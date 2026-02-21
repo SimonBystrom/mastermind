@@ -76,6 +76,8 @@ type Orchestrator struct {
 	tmux         tmux.TmuxOps
 	teamReader   team.TeamReader
 	lazygitSplit int
+	agentTeams   bool
+	teammateMode string
 
 	previewMu         sync.RWMutex
 	previewAgentID    string // ID of agent being previewed (empty = no preview)
@@ -113,6 +115,16 @@ func WithTeamReader(tr team.TeamReader) Option {
 	return func(o *Orchestrator) { o.teamReader = tr }
 }
 
+// WithAgentTeams enables or disables Claude Code agent teams.
+func WithAgentTeams(enabled bool) Option {
+	return func(o *Orchestrator) { o.agentTeams = enabled }
+}
+
+// WithTeammateMode sets the teammate mode for Claude Code split-pane collaboration.
+func WithTeammateMode(mode string) Option {
+	return func(o *Orchestrator) { o.teammateMode = mode }
+}
+
 func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
 		ctx:          ctx,
@@ -126,6 +138,8 @@ func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir
 		tmux:         tmux.RealTmux{},
 		teamReader:   team.NewReader(),
 		lazygitSplit: 80,
+		agentTeams:   true,
+		teammateMode: "in-process",
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -164,7 +178,7 @@ func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) 
 	}
 
 	// Write Claude Code project settings with statusline config
-	if err := writeClaudeProjectSettings(wtPath); err != nil {
+	if err := o.writeClaudeProjectSettings(wtPath); err != nil {
 		slog.Warn("failed to write claude project settings", "error", err)
 	}
 	// Write hook files so Claude Code reports status via hooks
@@ -1008,7 +1022,7 @@ func (o *Orchestrator) saveState() {
 // writeClaudeProjectSettings writes .claude/settings.json in the worktree
 // to configure Claude Code's statusline for this agent. It also ensures the
 // .claude/ directory and .claude-status.json sidecar are git-ignored.
-func writeClaudeProjectSettings(wtPath string) error {
+func (o *Orchestrator) writeClaudeProjectSettings(wtPath string) error {
 	dir := filepath.Join(wtPath, ".claude")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -1028,9 +1042,15 @@ func writeClaudeProjectSettings(wtPath string) error {
 			"type":    "command",
 			"command": config.StatuslineScriptPath(),
 		},
-		"env": map[string]string{
+	}
+
+	if o.agentTeams {
+		settings["env"] = map[string]string{
 			"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-		},
+		}
+	}
+	if o.teammateMode != "" {
+		settings["teammateMode"] = o.teammateMode
 	}
 
 	data, err := json.MarshalIndent(settings, "", "  ")
