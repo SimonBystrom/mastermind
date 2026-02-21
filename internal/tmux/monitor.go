@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var numberedListRegex = regexp.MustCompile(`^\d+\.\s`)
@@ -43,7 +45,9 @@ func (m *PaneMonitor) Remove(paneID string) {
 }
 
 func (m *PaneMonitor) GetPaneStatus(paneID string) (PaneStatus, error) {
-	out, err := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{pane_dead}|#{pane_dead_status}").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "tmux", "display-message", "-t", paneID, "-p", "#{pane_dead}|#{pane_dead_status}").Output()
 	if err != nil {
 		return PaneStatus{}, fmt.Errorf("failed to get pane status for %s: %w", paneID, err)
 	}
@@ -209,7 +213,9 @@ func detectNumberedList(bottomLines []string) bool {
 }
 
 func capturePane(paneID string) string {
-	out, err := exec.Command("tmux", "capture-pane", "-t", paneID, "-p").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "tmux", "capture-pane", "-t", paneID, "-p").Output()
 	if err != nil {
 		return ""
 	}

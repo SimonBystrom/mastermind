@@ -2,6 +2,7 @@ package tmux
 
 import (
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 )
@@ -26,7 +27,9 @@ func NewWindow(session, name, dir string, command []string) (string, error) {
 	paneID := strings.TrimSpace(string(out))
 
 	// Set remain-on-exit so we can detect when the process exits
-	exec.Command("tmux", "set-option", "-t", paneID, "remain-on-exit", "on").Run()
+	if err := exec.Command("tmux", "set-option", "-t", paneID, "remain-on-exit", "on").Run(); err != nil {
+		slog.Warn("failed to set remain-on-exit on pane", "pane", paneID, "error", err)
+	}
 
 	return paneID, nil
 }

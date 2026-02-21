@@ -78,52 +78,62 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Always keep the tick chain alive regardless of active view,
 		// and always forward to dashboard so it can update durations.
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, tickCmd()
+		var dashCmd tea.Cmd
+		m.dashboard, dashCmd = m.dashboard.Update(msg)
+		return m, tea.Batch(dashCmd, tickCmd())
 
 	case orchestrator.AgentFinishedMsg:
 		// Always forward agent-finished notifications to dashboard.
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(msg)
+		return m, cmd
 
 	case orchestrator.AgentWaitingMsg:
 		// Always forward agent-waiting notifications to dashboard.
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(msg)
+		return m, cmd
 
 	case orchestrator.AgentGoneMsg:
 		// Window was closed externally — forward to dashboard and clean up.
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(msg)
+		return m, cmd
 
 	case orchestrator.AgentReviewedMsg:
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(msg)
+		return m, cmd
 
 	case orchestrator.PreviewStartedMsg:
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(msg)
+		return m, cmd
 
 	case orchestrator.PreviewStoppedMsg:
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(msg)
+		return m, cmd
 
 	case orchestrator.PreviewErrorMsg:
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(msg)
+		return m, cmd
 
 	case orchestrator.MergeResultMsg:
-		m.dashboard, _ = m.dashboard.Update(msg)
+		var dashCmd tea.Cmd
+		m.dashboard, dashCmd = m.dashboard.Update(msg)
 		if m.activeView == viewMerge {
-			var cmd tea.Cmd
-			m.merge, cmd = m.merge.Update(msg)
-			return m, cmd
+			var mergeCmd tea.Cmd
+			m.merge, mergeCmd = m.merge.Update(msg)
+			return m, tea.Batch(dashCmd, mergeCmd)
 		}
-		return m, nil
+		return m, dashCmd
 
 	case orchestrator.CleanupMsg:
-		m.dashboard, _ = m.dashboard.Update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(msg)
+		return m, cmd
 
 	case spawnDoneMsg:
 		m.activeView = viewDashboard

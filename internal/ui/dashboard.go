@@ -62,6 +62,13 @@ func tickCmd() tea.Cmd {
 	})
 }
 
+func (m *dashboardModel) addNotification(n notification) {
+	m.notifications = append(m.notifications, n)
+	if len(m.notifications) > 10 {
+		m.notifications = m.notifications[len(m.notifications)-10:]
+	}
+}
+
 func (m dashboardModel) Init() tea.Cmd {
 	return tickCmd()
 }
@@ -79,27 +86,21 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			text = fmt.Sprintf("Agent %s finished with no changes (exit %d)", name, msg.ExitCode)
 			style = m.styles.Done
 		}
-		m.notifications = append(m.notifications, notification{
+		m.addNotification(notification{
 			text:  text,
 			time:  time.Now(),
 			style: style,
 		})
-		if len(m.notifications) > 10 {
-			m.notifications = m.notifications[len(m.notifications)-10:]
-		}
 		return m, nil
 
 	case orchestrator.AgentGoneMsg:
 		name := msg.AgentID
 		m.store.Remove(msg.AgentID)
-		m.notifications = append(m.notifications, notification{
+		m.addNotification(notification{
 			text:  fmt.Sprintf("Agent %s window closed", name),
 			time:  time.Now(),
 			style: m.styles.Done,
 		})
-		if len(m.notifications) > 10 {
-			m.notifications = m.notifications[len(m.notifications)-10:]
-		}
 		agents := m.sortedAgents()
 		if m.cursor >= len(agents) && m.cursor > 0 {
 			m.cursor = len(agents) - 1
@@ -117,14 +118,11 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			text = fmt.Sprintf("Agent %s review closed — no new commits", name)
 			style = m.styles.Done
 		}
-		m.notifications = append(m.notifications, notification{
+		m.addNotification(notification{
 			text:  text,
 			time:  time.Now(),
 			style: style,
 		})
-		if len(m.notifications) > 10 {
-			m.notifications = m.notifications[len(m.notifications)-10:]
-		}
 		return m, nil
 
 	case orchestrator.MergeResultMsg:
@@ -141,14 +139,11 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			text = fmt.Sprintf("Agent %s merge failed: %s", name, msg.Error)
 			style = m.styles.Error
 		}
-		m.notifications = append(m.notifications, notification{
+		m.addNotification(notification{
 			text:  text,
 			time:  time.Now(),
 			style: style,
 		})
-		if len(m.notifications) > 10 {
-			m.notifications = m.notifications[len(m.notifications)-10:]
-		}
 		agents := m.sortedAgents()
 		if m.cursor >= len(agents) && m.cursor > 0 {
 			m.cursor = len(agents) - 1
@@ -157,26 +152,20 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 
 	case orchestrator.PreviewStartedMsg:
 		name := msg.AgentID
-		m.notifications = append(m.notifications, notification{
+		m.addNotification(notification{
 			text:  fmt.Sprintf("Preview started for agent %s", name),
 			time:  time.Now(),
 			style: m.styles.Previewing,
 		})
-		if len(m.notifications) > 10 {
-			m.notifications = m.notifications[len(m.notifications)-10:]
-		}
 		return m, nil
 
 	case orchestrator.PreviewStoppedMsg:
 		name := msg.AgentID
-		m.notifications = append(m.notifications, notification{
+		m.addNotification(notification{
 			text:  fmt.Sprintf("Preview stopped for agent %s", name),
 			time:  time.Now(),
 			style: m.styles.Done,
 		})
-		if len(m.notifications) > 10 {
-			m.notifications = m.notifications[len(m.notifications)-10:]
-		}
 		return m, nil
 
 	case orchestrator.PreviewErrorMsg:
@@ -197,14 +186,11 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			text = fmt.Sprintf("Agent %s is waiting for input", name)
 			style = m.styles.Waiting
 		}
-		m.notifications = append(m.notifications, notification{
+		m.addNotification(notification{
 			text:  text,
 			time:  time.Now(),
 			style: style,
 		})
-		if len(m.notifications) > 10 {
-			m.notifications = m.notifications[len(m.notifications)-10:]
-		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -284,28 +270,22 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			results := m.orch.CleanupDeadAgents()
 			if len(results) > 0 {
 				for _, r := range results {
-					m.notifications = append(m.notifications, notification{
+					m.addNotification(notification{
 						text:  fmt.Sprintf("Cleaned up %s (%s)", r.AgentName, r.Reason),
 						time:  time.Now(),
 						style: m.styles.Done,
 					})
-				}
-				if len(m.notifications) > 10 {
-					m.notifications = m.notifications[len(m.notifications)-10:]
 				}
 				agents = m.sortedAgents()
 				if m.cursor >= len(agents) && m.cursor > 0 {
 					m.cursor = len(agents) - 1
 				}
 			} else {
-				m.notifications = append(m.notifications, notification{
+				m.addNotification(notification{
 					text:  "No dead agents found",
 					time:  time.Now(),
 					style: m.styles.Done,
 				})
-				if len(m.notifications) > 10 {
-					m.notifications = m.notifications[len(m.notifications)-10:]
-				}
 			}
 		case "p":
 			if len(agents) > 0 && m.cursor < len(agents) {
@@ -663,7 +643,7 @@ func (m dashboardModel) ViewContent() string {
 	// Determine which actions are available for the selected agent
 	var selectedStatus agent.Status
 	hasSelection := false
-	if agents := m.sortedAgents(); len(agents) > 0 && m.cursor < len(agents) {
+	if len(agents) > 0 && m.cursor < len(agents) {
 		hasSelection = true
 		selectedStatus = agents[m.cursor].GetStatus()
 	}

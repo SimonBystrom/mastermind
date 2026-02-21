@@ -56,10 +56,12 @@ if [ -z "$STATUS" ]; then
   exit 0
 fi
 
-# Write status file to the working directory
+# Write status file atomically to the working directory
 TS=$(date +%s)
 STATUS_FILE="${CLAUDE_WORKING_DIRECTORY:-.}/.mastermind-status"
-printf '{"status":"%s","ts":%s}\n' "$STATUS" "$TS" > "$STATUS_FILE"
+TMP_FILE=$(mktemp "${STATUS_FILE}.XXXXXX")
+printf '{"status":"%s","ts":%s}\n' "$STATUS" "$TS" > "$TMP_FILE"
+mv "$TMP_FILE" "$STATUS_FILE"
 `
 
 // settingsJSON is the .claude/settings.local.json content that registers hooks.

@@ -75,6 +75,7 @@ type Orchestrator struct {
 	tmux        tmux.TmuxOps
 	lazygitSplit int
 
+	previewMu         sync.RWMutex
 	previewAgentID    string // ID of agent being previewed (empty = no preview)
 	previewPrevBranch string // branch the main worktree was on before preview
 	previewPrevStatus agent.Status // agent's status before preview started
@@ -204,19 +205,27 @@ func (o *Orchestrator) DismissAgent(id string, deleteBranch bool) error {
 
 	// Kill lazygit pane if open
 	if lgPane := a.GetLazygitPaneID(); lgPane != "" {
-		o.tmux.KillPane(lgPane)
+		if err := o.tmux.KillPane(lgPane); err != nil {
+			slog.Warn("failed to kill lazygit pane", "id", id, "pane", lgPane, "error", err)
+		}
 	}
 
 	if a.TmuxWindow != "" {
-		o.tmux.KillWindow(a.TmuxWindow)
+		if err := o.tmux.KillWindow(a.TmuxWindow); err != nil {
+			slog.Warn("failed to kill tmux window", "id", id, "window", a.TmuxWindow, "error", err)
+		}
 	}
 
 	if a.WorktreePath != "" {
-		o.git.RemoveWorktree(o.repoPath, a.WorktreePath)
+		if err := o.git.RemoveWorktree(o.repoPath, a.WorktreePath); err != nil {
+			slog.Warn("failed to remove worktree", "id", id, "path", a.WorktreePath, "error", err)
+		}
 	}
 
 	if deleteBranch && a.Branch != "" {
-		o.git.DeleteBranch(o.repoPath, a.Branch)
+		if err := o.git.DeleteBranch(o.repoPath, a.Branch); err != nil {
+			slog.Warn("failed to delete branch", "id", id, "branch", a.Branch, "error", err)
+		}
 	}
 
 	o.store.Remove(id)
@@ -368,15 +377,9 @@ func (o *Orchestrator) StartMonitor() {
 			} else if a.GetEverActive() {
 				o.handleAgentIdle(a)
 			}
-		}
-		// Read statusline sidecar files for active agents
-		for _, a := range agents {
-			status := a.GetStatus()
-			if status == agent.StatusDismissed {
-				continue
-			}
-			sd, err := agent.ReadStatuslineFile(a.WorktreePath)
-			if err == nil {
+
+			// Read statusline sidecar file for this agent
+			if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
 				a.SetStatuslineData(sd)
 			}
 		}
@@ -609,14 +612,20 @@ func (o *Orchestrator) cleanupAfterMerge(a *agent.Agent) error {
 	}
 	if removeWorktree {
 		if a.TmuxWindow != "" {
-			o.tmux.KillWindow(a.TmuxWindow)
+			if err := o.tmux.KillWindow(a.TmuxWindow); err != nil {
+				slog.Warn("cleanup: failed to kill tmux window", "id", a.ID, "window", a.TmuxWindow, "error", err)
+			}
 		}
 		if a.WorktreePath != "" {
-			o.git.RemoveWorktree(o.repoPath, a.WorktreePath)
+			if err := o.git.RemoveWorktree(o.repoPath, a.WorktreePath); err != nil {
+				slog.Warn("cleanup: failed to remove worktree", "id", a.ID, "path", a.WorktreePath, "error", err)
+			}
 		}
 	}
 	if deleteBranch && a.Branch != "" {
-		o.git.DeleteBranch(o.repoPath, a.Branch)
+		if err := o.git.DeleteBranch(o.repoPath, a.Branch); err != nil {
+			slog.Warn("cleanup: failed to delete branch", "id", a.ID, "branch", a.Branch, "error", err)
+		}
 	}
 	o.store.Remove(a.ID)
 	slog.Info("agent cleaned up after merge", "id", a.ID, "removeWorktree", removeWorktree, "deleteBranch", deleteBranch)
@@ -668,11 +677,13 @@ func (o *Orchestrator) previewStatePath() string {
 }
 
 func (o *Orchestrator) savePreviewState() {
+	o.previewMu.RLock()
 	ps := previewState{
 		AgentID:    o.previewAgentID,
 		PrevBranch: o.previewPrevBranch,
 		PrevStatus: o.previewPrevStatus,
 	}
+	o.previewMu.RUnlock()
 	data, err := json.MarshalIndent(ps, "", "  ")
 	if err != nil {
 		slog.Error("failed to marshal preview state", "error", err)
@@ -700,13 +711,18 @@ func (o *Orchestrator) loadPreviewState() *previewState {
 }
 
 func (o *Orchestrator) GetPreviewAgentID() string {
+	o.previewMu.RLock()
+	defer o.previewMu.RUnlock()
 	return o.previewAgentID
 }
 
 func (o *Orchestrator) PreviewAgent(id string) error {
+	o.previewMu.Lock()
 	if o.previewAgentID != "" {
+		o.previewMu.Unlock()
 		return fmt.Errorf("preview already active for agent %s — stop it first", o.previewAgentID)
 	}
+	o.previewMu.Unlock()
 
 	a, ok := o.store.Get(id)
 	if !ok {
@@ -758,9 +774,11 @@ func (o *Orchestrator) PreviewAgent(id string) error {
 		}
 	}
 
+	o.previewMu.Lock()
 	o.previewAgentID = id
 	o.previewPrevBranch = prevBranch
 	o.previewPrevStatus = status
+	o.previewMu.Unlock()
 	a.SetStatus(agent.StatusPreviewing)
 	o.savePreviewState()
 
@@ -772,11 +790,17 @@ func (o *Orchestrator) PreviewAgent(id string) error {
 }
 
 func (o *Orchestrator) StopPreview() error {
+	o.previewMu.Lock()
 	if o.previewAgentID == "" {
+		o.previewMu.Unlock()
 		return fmt.Errorf("no preview is active")
 	}
 
 	agentID := o.previewAgentID
+	prevBranch := o.previewPrevBranch
+	prevStatus := o.previewPrevStatus
+	o.previewMu.Unlock()
+
 	previewBranch := "preview/" + agentID
 
 	// Discard any uncommitted changes that were applied during preview,
@@ -785,7 +809,7 @@ func (o *Orchestrator) StopPreview() error {
 		exec.Command("git", "-C", o.repoPath, "checkout", ".").Run()
 	}
 
-	if err := o.git.CheckoutBranch(o.repoPath, o.previewPrevBranch); err != nil {
+	if err := o.git.CheckoutBranch(o.repoPath, prevBranch); err != nil {
 		return fmt.Errorf("checkout previous branch: %w", err)
 	}
 
@@ -795,12 +819,14 @@ func (o *Orchestrator) StopPreview() error {
 
 	// Restore agent's previous status
 	if a, ok := o.store.Get(agentID); ok {
-		a.SetStatus(o.previewPrevStatus)
+		a.SetStatus(prevStatus)
 	}
 
+	o.previewMu.Lock()
 	o.previewAgentID = ""
 	o.previewPrevBranch = ""
 	o.previewPrevStatus = ""
+	o.previewMu.Unlock()
 	o.deletePreviewState()
 
 	slog.Info("preview stopped", "agent", agentID)
@@ -827,6 +853,7 @@ func (o *Orchestrator) ResetPreviewCleanup() {
 }
 
 func (o *Orchestrator) doCleanupPreview() {
+	o.previewMu.Lock()
 	// Try to restore from persisted state if not already loaded
 	if o.previewAgentID == "" {
 		if ps := o.loadPreviewState(); ps != nil {
@@ -837,18 +864,24 @@ func (o *Orchestrator) doCleanupPreview() {
 	}
 
 	if o.previewAgentID == "" {
+		o.previewMu.Unlock()
 		return
 	}
 
-	previewBranch := "preview/" + o.previewAgentID
+	agentID := o.previewAgentID
+	prevBranch := o.previewPrevBranch
+	prevStatus := o.previewPrevStatus
+	o.previewMu.Unlock()
+
+	previewBranch := "preview/" + agentID
 
 	// Discard uncommitted preview changes before switching back.
 	if o.git.HasChanges(o.repoPath) {
 		exec.Command("git", "-C", o.repoPath, "checkout", ".").Run()
 	}
 
-	if err := o.git.CheckoutBranch(o.repoPath, o.previewPrevBranch); err != nil {
-		slog.Error("cleanup: failed to checkout previous branch", "branch", o.previewPrevBranch, "error", err)
+	if err := o.git.CheckoutBranch(o.repoPath, prevBranch); err != nil {
+		slog.Error("cleanup: failed to checkout previous branch", "branch", prevBranch, "error", err)
 	}
 
 	if o.git.BranchExists(o.repoPath, previewBranch) {
@@ -857,13 +890,15 @@ func (o *Orchestrator) doCleanupPreview() {
 		}
 	}
 
-	if a, ok := o.store.Get(o.previewAgentID); ok {
-		a.SetStatus(o.previewPrevStatus)
+	if a, ok := o.store.Get(agentID); ok {
+		a.SetStatus(prevStatus)
 	}
 
+	o.previewMu.Lock()
 	o.previewAgentID = ""
 	o.previewPrevBranch = ""
 	o.previewPrevStatus = ""
+	o.previewMu.Unlock()
 	o.deletePreviewState()
 	o.saveState()
 	slog.Info("preview cleaned up")
@@ -929,9 +964,11 @@ func (o *Orchestrator) RecoverAgents() {
 
 	// Recover preview state
 	if ps := o.loadPreviewState(); ps != nil && ps.AgentID != "" {
+		o.previewMu.Lock()
 		o.previewAgentID = ps.AgentID
 		o.previewPrevBranch = ps.PrevBranch
 		o.previewPrevStatus = ps.PrevStatus
+		o.previewMu.Unlock()
 		slog.Info("recovered preview state", "agent", ps.AgentID, "prevBranch", ps.PrevBranch)
 	}
 }
