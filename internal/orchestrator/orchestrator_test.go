@@ -264,6 +264,11 @@ func (m *mockTmux) ListAllPanes(session string) (map[string]string, error) {
 	return nil, fmt.Errorf("not available in mock")
 }
 
+func (m *mockTmux) ListPanesInWindow(windowID string) ([]string, error) {
+	m.record("ListPanesInWindow:" + windowID)
+	return nil, nil
+}
+
 type mockMonitor struct {
 	mu    sync.Mutex
 	calls []string

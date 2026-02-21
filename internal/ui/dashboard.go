@@ -240,6 +240,9 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "m":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
+				if a.IsTeammate() {
+					break
+				}
 				status := a.GetStatus()
 				if status == agent.StatusReviewed || status == agent.StatusReviewReady {
 					name := a.ID
@@ -256,6 +259,9 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "d":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
+				if a.IsTeammate() {
+					break
+				}
 				name := a.ID
 				return m, func() tea.Msg {
 					return startDismissMsg{
@@ -290,6 +296,9 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "p":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
+				if a.IsTeammate() {
+					break
+				}
 				previewID := m.orch.GetPreviewAgentID()
 				if previewID != "" && previewID == a.ID {
 					// Stop preview for this agent
@@ -313,6 +322,9 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		case "D":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
+				if a.IsTeammate() {
+					break
+				}
 				name := a.ID
 				return m, func() tea.Msg {
 					return startDismissMsg{
@@ -526,7 +538,13 @@ func (m dashboardModel) ViewContent() string {
 
 			// Team data column
 			teamStr := ""
-			if ti := a.GetTeamInfo(); ti != nil {
+			if a.IsTeammate() {
+				if a.TeammateName != "" {
+					teamStr = a.TeammateName
+				} else {
+					teamStr = "teammate"
+				}
+			} else if ti := a.GetTeamInfo(); ti != nil {
 				teamStr = fmt.Sprintf("%da %d/%dt", ti.MemberCount, ti.CompletedTasks, ti.TotalTasks)
 			}
 

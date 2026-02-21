@@ -12,6 +12,7 @@ type TmuxOps interface {
 	PaneExistsInWindow(paneID, windowID string) bool
 	WindowIDForPane(paneID string) (string, error)
 	ListAllPanes(session string) (map[string]string, error)
+	ListPanesInWindow(windowID string) ([]string, error)
 }
 
 // PaneStatusChecker abstracts pane monitoring for testing.
@@ -61,4 +62,8 @@ func (RealTmux) WindowIDForPane(paneID string) (string, error) {
 
 func (RealTmux) ListAllPanes(session string) (map[string]string, error) {
 	return ListAllPanes(session)
+}
+
+func (RealTmux) ListPanesInWindow(windowID string) ([]string, error) {
+	return ListPanesInWindow(windowID)
 }
