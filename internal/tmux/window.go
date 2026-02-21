@@ -108,6 +108,26 @@ func PaneExistsInWindow(paneID, windowID string) bool {
 	return false
 }
 
+// ListAllPanes returns a map of pane ID → window ID for all panes in the session.
+// This allows batch existence checks with a single tmux subprocess.
+func ListAllPanes(session string) (map[string]string, error) {
+	out, err := exec.Command("tmux", "list-panes", "-s", "-t", session, "-F", "#{pane_id}|#{window_id}").Output()
+	if err != nil {
+		return nil, fmt.Errorf("list-panes: %w", err)
+	}
+	result := make(map[string]string)
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 2)
+		if len(parts) == 2 {
+			result[parts[0]] = parts[1]
+		}
+	}
+	return result, nil
+}
+
 // WindowIDForPane returns the window ID that contains the given pane.
 func WindowIDForPane(paneID string) (string, error) {
 	out, err := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{window_id}").Output()

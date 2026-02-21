@@ -10,6 +10,7 @@ type Store struct {
 	mu     sync.RWMutex
 	agents map[string]*Agent
 	nextID atomic.Int64
+	dirty  atomic.Bool
 }
 
 func NewStore() *Store {
@@ -26,6 +27,22 @@ func (s *Store) Add(a *Agent) {
 		a.ID = fmt.Sprintf("a%d", id)
 	}
 	s.agents[a.ID] = a
+	s.dirty.Store(true)
+}
+
+// MarkDirty marks the store as having unsaved changes.
+func (s *Store) MarkDirty() {
+	s.dirty.Store(true)
+}
+
+// IsDirty returns true if the store has unsaved changes.
+func (s *Store) IsDirty() bool {
+	return s.dirty.Load()
+}
+
+// ClearDirty resets the dirty flag.
+func (s *Store) ClearDirty() {
+	s.dirty.Store(false)
 }
 
 func (s *Store) Get(id string) (*Agent, bool) {
@@ -53,6 +70,7 @@ func (s *Store) UpdateStatus(id string, status Status) bool {
 		return false
 	}
 	a.SetStatus(status)
+	s.dirty.Store(true)
 	return true
 }
 
@@ -60,4 +78,5 @@ func (s *Store) Remove(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.agents, id)
+	s.dirty.Store(true)
 }

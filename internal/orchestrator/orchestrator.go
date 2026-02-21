@@ -314,12 +314,29 @@ func (o *Orchestrator) StartMonitor() {
 		}
 
 		agents := o.store.All()
+
+		// Batch-fetch all panes in the session to avoid N individual list-panes calls
+		allPanes, paneListErr := o.tmux.ListAllPanes(o.session)
+		if paneListErr != nil {
+			slog.Debug("ListAllPanes failed, falling back to per-agent checks", "error", paneListErr)
+			allPanes = nil // nil signals fallback
+		}
+
+		// paneInWindow checks if a pane exists in the expected window,
+		// using the batch result when available.
+		paneInWindow := func(paneID, windowID string) bool {
+			if allPanes != nil {
+				return allPanes[paneID] == windowID
+			}
+			return o.tmux.PaneExistsInWindow(paneID, windowID)
+		}
+
 		for _, a := range agents {
 			status := a.GetStatus()
 
 			// Handle lazygit pane detection for reviewing/conflicts agents
 			if (status == agent.StatusReviewing || status == agent.StatusConflicts) && a.GetLazygitPaneID() != "" {
-				lgGone := !o.tmux.PaneExistsInWindow(a.GetLazygitPaneID(), a.TmuxWindow)
+				lgGone := !paneInWindow(a.GetLazygitPaneID(), a.TmuxWindow)
 				if !lgGone {
 					// Pane exists but may be dead (remain-on-exit keeps it around).
 					lgStatus, err := o.monitor.GetPaneStatus(a.GetLazygitPaneID())
@@ -342,10 +359,11 @@ func (o *Orchestrator) StartMonitor() {
 			}
 
 			// Check if pane still exists (hooks can't detect this)
-			if !o.tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
+			if !paneInWindow(a.TmuxPaneID, a.TmuxWindow) {
 				slog.Debug("pane gone, marking dismissed", "id", a.ID, "pane", a.TmuxPaneID)
 				o.monitor.Remove(a.TmuxPaneID)
 				a.SetStatus(agent.StatusDismissed)
+				o.store.MarkDirty()
 				if o.program != nil {
 					o.program.Send(AgentGoneMsg{AgentID: a.ID})
 				}
@@ -358,6 +376,7 @@ func (o *Orchestrator) StartMonitor() {
 				slog.Debug("pane gone, marking dismissed", "id", a.ID, "pane", a.TmuxPaneID)
 				o.monitor.Remove(a.TmuxPaneID)
 				a.SetStatus(agent.StatusDismissed)
+				o.store.MarkDirty()
 				if o.program != nil {
 					o.program.Send(AgentGoneMsg{AgentID: a.ID})
 				}
@@ -381,6 +400,7 @@ func (o *Orchestrator) StartMonitor() {
 				if status != agent.StatusRunning {
 					a.SetStatus(agent.StatusRunning)
 					a.SetWaitingFor("")
+					o.store.MarkDirty()
 					slog.Debug("agent status change (tmux)", "id", a.ID, "status", "running")
 				}
 			} else if paneStatus.WaitingFor == "permission" {
@@ -388,6 +408,7 @@ func (o *Orchestrator) StartMonitor() {
 				if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
 					a.SetStatus(agent.StatusWaiting)
 					a.SetWaitingFor("permission")
+					o.store.MarkDirty()
 					slog.Debug("agent status change (tmux)", "id", a.ID, "status", "waiting", "waitingFor", "permission")
 					if o.program != nil {
 						o.program.Send(AgentWaitingMsg{
@@ -403,6 +424,7 @@ func (o *Orchestrator) StartMonitor() {
 			// Read statusline sidecar file for this agent
 			if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
 				a.SetStatuslineData(sd)
+				o.store.MarkDirty()
 			}
 		}
 
@@ -421,9 +443,13 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 			a.SetTeamInfo(ti) // nil clears stale data
+			o.store.MarkDirty()
 		}
 
-		o.saveState()
+		if o.store.IsDirty() {
+			o.saveState()
+			o.store.ClearDirty()
+		}
 	}
 }
 
@@ -446,6 +472,7 @@ func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) boo
 		if status != agent.StatusRunning {
 			a.SetStatus(agent.StatusRunning)
 			a.SetWaitingFor("")
+			o.store.MarkDirty()
 			slog.Debug("agent status change (hook)", "id", a.ID, "status", "running")
 		}
 
@@ -454,6 +481,7 @@ func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) boo
 		if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
 			a.SetStatus(agent.StatusWaiting)
 			a.SetWaitingFor("permission")
+			o.store.MarkDirty()
 			slog.Debug("agent status change (hook)", "id", a.ID, "status", "waiting", "waitingFor", "permission")
 			if o.program != nil {
 				o.program.Send(AgentWaitingMsg{
@@ -464,7 +492,6 @@ func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) boo
 		}
 
 	case hook.StatusWaitingInput:
-		a.SetEverActive(true)
 		if a.GetEverActive() {
 			o.handleAgentIdle(a)
 		}
@@ -495,6 +522,7 @@ func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 	} else {
 		a.SetStatus(agent.StatusDone)
 	}
+	o.store.MarkDirty()
 
 	slog.Info("agent finished", "id", a.ID, "exitCode", exitCode, "hasChanges", hasChanges)
 
@@ -517,6 +545,7 @@ func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 		if a.GetStatus() != agent.StatusReviewReady {
 			a.SetStatus(agent.StatusReviewReady)
 			a.SetFinished(a.GetExitCode(), time.Now())
+			o.store.MarkDirty()
 			slog.Info("agent idle with changes", "id", a.ID)
 			if o.program != nil {
 				o.program.Send(AgentFinishedMsg{
@@ -529,6 +558,7 @@ func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 		if a.GetStatus() != agent.StatusDone {
 			a.SetStatus(agent.StatusDone)
 			a.SetFinished(a.GetExitCode(), time.Now())
+			o.store.MarkDirty()
 			slog.Info("agent idle without changes", "id", a.ID)
 			if o.program != nil {
 				o.program.Send(AgentFinishedMsg{
@@ -761,34 +791,47 @@ func (o *Orchestrator) PreviewAgent(id string) error {
 		o.previewMu.Unlock()
 		return fmt.Errorf("preview already active for agent %s — stop it first", o.previewAgentID)
 	}
+	o.previewAgentID = "__starting__"
 	o.previewMu.Unlock()
+
+	resetSentinel := func() {
+		o.previewMu.Lock()
+		o.previewAgentID = ""
+		o.previewMu.Unlock()
+	}
 
 	a, ok := o.store.Get(id)
 	if !ok {
+		resetSentinel()
 		return fmt.Errorf("agent %s not found", id)
 	}
 
 	status := a.GetStatus()
 	if status != agent.StatusReviewReady && status != agent.StatusReviewed && status != agent.StatusReviewing {
+		resetSentinel()
 		return fmt.Errorf("agent %s is not reviewable (status: %s)", id, status)
 	}
 
 	if o.git.HasChanges(o.repoPath) {
+		resetSentinel()
 		return fmt.Errorf("main worktree has uncommitted changes — commit or stash them first")
 	}
 
 	prevBranch, err := o.git.CurrentBranch(o.repoPath)
 	if err != nil {
+		resetSentinel()
 		return fmt.Errorf("get current branch: %w", err)
 	}
 
 	previewBranch := "preview/" + id
 	if err := o.git.CreateBranch(o.repoPath, previewBranch, a.BaseBranch); err != nil {
+		resetSentinel()
 		return fmt.Errorf("create preview branch: %w", err)
 	}
 
 	if err := o.git.CheckoutBranch(o.repoPath, previewBranch); err != nil {
 		o.git.DeleteBranch(o.repoPath, previewBranch)
+		resetSentinel()
 		return fmt.Errorf("checkout preview branch: %w", err)
 	}
 
@@ -796,12 +839,14 @@ func (o *Orchestrator) PreviewAgent(id string) error {
 	if err != nil {
 		o.git.CheckoutBranch(o.repoPath, prevBranch)
 		o.git.DeleteBranch(o.repoPath, previewBranch)
+		resetSentinel()
 		return fmt.Errorf("merge agent branch: %w", err)
 	}
 	if conflicted {
 		o.git.MergeAbort(o.repoPath)
 		o.git.CheckoutBranch(o.repoPath, prevBranch)
 		o.git.DeleteBranch(o.repoPath, previewBranch)
+		resetSentinel()
 		return fmt.Errorf("merge conflicts between %s and %s — cannot preview", a.BaseBranch, a.Branch)
 	}
 
