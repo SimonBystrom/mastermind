@@ -566,62 +566,79 @@ func (m dashboardModel) ViewContent() string {
 
 			isSelected := i == m.cursor
 
-			// For selected rows, keep status colors but strip indicators.
-			displayStatus := styledStatus
-			displayCtx := ctxPctStr
-			displayIndicator := indicator
+			var row string
 			if isSelected {
-				if w := lipgloss.Width(displayStatus); w < colW[3] {
-					displayStatus += strings.Repeat(" ", colW[3]-w)
+				// Selected row: plain text only, single outer style.
+				// Avoids ANSI nesting conflicts that cause background gaps.
+				plainStatus := string(status)
+				if status == agent.StatusWaiting {
+					if waitingFor == "permission" {
+						plainStatus = "permission"
+					} else if waitingFor == "unknown" {
+						plainStatus = "attention?"
+					} else {
+						plainStatus = "waiting"
+					}
 				}
-				if w := len(displayCtx); w < colW[6] {
-					displayCtx += strings.Repeat(" ", colW[6]-w)
+
+				row = fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s  ",
+					colW[0], a.ID,
+					colW[1], truncate(modelStr, colW[1]),
+					colW[2], truncate(a.Branch, colW[2]),
+					colW[3], plainStatus,
+					colW[4], dur,
+					colW[5], costStr,
+					colW[6], ctxPctStr,
+					colW[7], linesStr,
+					colW[8], truncate(teamStr, colW[8]),
+				)
+
+				// Pad to full content width using visual width for safety
+				if w := lipgloss.Width(row); w < cw {
+					row += strings.Repeat(" ", cw-w)
 				}
-				displayIndicator = "  "
+				row = m.styles.Selected.Render(row)
 			} else {
+				// Non-selected row: styled status, ctx%, team, and indicator.
+				displayStatus := styledStatus
 				// Pad styled status to colW[3] visual characters (fmt %-*s counts
 				// bytes which breaks with ANSI escape codes from lipgloss).
 				if w := lipgloss.Width(displayStatus); w < colW[3] {
 					displayStatus += strings.Repeat(" ", colW[3]-w)
 				}
+
+				displayCtx := ctxPctStr
 				if ctxPct > 80 {
 					displayCtx = m.styles.Attention.Render(ctxPctStr)
 				}
 				if w := lipgloss.Width(displayCtx); w < colW[6] {
 					displayCtx += strings.Repeat(" ", colW[6]-w)
 				}
-			}
 
-			// Style team string
-			displayTeam := teamStr
-			if !isSelected && teamStr != "" {
-				displayTeam = m.styles.Team.Render(teamStr)
-			}
-			if w := lipgloss.Width(displayTeam); w < colW[8] {
-				displayTeam += strings.Repeat(" ", colW[8]-w)
-			}
+				displayTeam := teamStr
+				if teamStr != "" {
+					displayTeam = m.styles.Team.Render(teamStr)
+				}
+				if w := lipgloss.Width(displayTeam); w < colW[8] {
+					displayTeam += strings.Repeat(" ", colW[8]-w)
+				}
 
-			// Build the row content — gaps between all columns must match header
-			row := fmt.Sprintf("  %-*s %-*s %-*s %s %-*s %-*s %s %-*s %s %s",
-				colW[0], a.ID,
-				colW[1], truncate(modelStr, colW[1]),
-				colW[2], truncate(a.Branch, colW[2]),
-				displayStatus,
-				colW[4], dur,
-				colW[5], costStr,
-				displayCtx,
-				colW[7], linesStr,
-				displayTeam,
-				displayIndicator,
-			)
+				row = fmt.Sprintf("  %-*s %-*s %-*s %s %-*s %-*s %s %-*s %s %s",
+					colW[0], a.ID,
+					colW[1], truncate(modelStr, colW[1]),
+					colW[2], truncate(a.Branch, colW[2]),
+					displayStatus,
+					colW[4], dur,
+					colW[5], costStr,
+					displayCtx,
+					colW[7], linesStr,
+					displayTeam,
+					indicator,
+				)
 
-			// Pad row to full content width so selected highlight spans entire row
-			if w := lipgloss.Width(row); w < cw {
-				row += strings.Repeat(" ", cw-w)
-			}
-
-			if isSelected {
-				row = m.styles.Selected.Render(row)
+				if w := lipgloss.Width(row); w < cw {
+					row += strings.Repeat(" ", cw-w)
+				}
 			}
 
 			b.WriteString(row)
