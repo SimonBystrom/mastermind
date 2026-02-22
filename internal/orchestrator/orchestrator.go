@@ -806,14 +806,6 @@ func (o *Orchestrator) CleanupDeadAgents() []CleanupResult {
 	return results
 }
 
-func (o *Orchestrator) RepoPath() string {
-	return o.repoPath
-}
-
-func (o *Orchestrator) Session() string {
-	return o.session
-}
-
 // --- Preview ---
 
 // previewState is persisted to disk so preview can be cleaned up on restart.

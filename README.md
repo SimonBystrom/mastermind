@@ -103,6 +103,10 @@ The config uses TOML format:
 [layout]
 # dashboard_width = 55   # percentage of terminal width for left panel
 # lazygit_split   = 80   # percentage for lazygit pane size
+
+[claude]
+# agent_teams   = true           # enable Claude Code agent teams
+# teammate_mode = "in-process"   # teammate mode for agent team collaboration
 ```
 
 ## Features
@@ -118,8 +122,8 @@ The config uses TOML format:
 - **Notifications** — color-coded event feed showing agent state transitions
 - **Persistence** — agent state is saved to `.worktrees/mastermind-state.json` so agents survive a mastermind restart (recovered if their tmux windows still exist)
 - **Dead agent cleanup** — detect and clean up agents whose tmux windows or worktrees have disappeared, or whose branches have already been merged
-- **System monitor** — automatically opens btop (or top) in a split pane for system resource monitoring
-- **Fully configurable** — TOML config with 24 customizable color slots (defaults to Catppuccin Mocha) and layout sizing options
+- **Agent teams** — optionally enable Claude Code agent teams so each spawned agent can use Claude's native team/task coordination (configured via `[claude]` in config)
+- **Fully configurable** — TOML config with 25 customizable color slots (defaults to Catppuccin Mocha), layout sizing options, and Claude agent behavior settings
 
 ## Keybindings
 
@@ -158,6 +162,7 @@ review ready → reviewing (lazygit open) → reviewed (commits made)
 | **previewing** | Branch diff preview is active against base branch |
 | **reviewed** | Review completed, new commits were made |
 | **conflicts** | Merge conflicts detected, needs resolution |
+| **dismissed** | Agent was manually dismissed |
 | **done** | Agent finished with no pending changes |
 
 ## How It Works
