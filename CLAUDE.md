@@ -33,8 +33,9 @@ The two central packages are **orchestrator** (async engine) and **ui** (Bubble 
 - **`agent/`** — Agent data model + thread-safe `Store` (RWMutex-guarded map with atomic ID counter). Persistence to `.worktrees/mastermind-state.json`. Statusline parsing for cost/model/context data.
 - **`git/`** — Git operations behind a `GitOps` interface. Branch CRUD, worktree management, merge (fast-forward + full), conflict detection. Worktrees stored in `.worktrees/`.
 - **`tmux/`** — Tmux operations behind a `TmuxOps` interface. Window/pane management, status monitoring via pane content polling (SHA256 hashing for stability), pane death detection.
-- **`hook/`** — Claude Code hook registration. Generates `.claude/settings.local.json` and `.claude/hooks/mastermind-status.sh` in each worktree for instant status updates.
-- **`config/`** — TOML config parsing from `~/.config/mastermind/mastermind.conf`. 24 color slots (Catppuccin Mocha defaults) and layout sizing.
+- **`hook/`** — Claude Code hook registration. Generates `.claude/settings.local.json` and `.claude/hooks/mastermind-status.sh` in each worktree for instant status updates. The hook script writes `{"status":"...","ts":...}` to `.mastermind-status` atomically.
+- **`config/`** — TOML config parsing from `~/.config/mastermind/mastermind.conf`. 25 color slots (Catppuccin Mocha defaults), layout sizing, and `[claude]` section (`agent_teams`, `teammate_mode`). Also installs `~/.config/mastermind/statusline.sh` — the Claude Code statusline script that writes `.claude-status.json` sidecar files.
+- **`team/`** — Reads Claude Code's native team/task data from `~/.claude/teams/` and `~/.claude/tasks/`. `TeamReader` interface matches a team to a mastermind session by the lead agent's session ID, with 10s TTL caching.
 
 ## Key Patterns
 
@@ -44,13 +45,15 @@ The two central packages are **orchestrator** (async engine) and **ui** (Bubble 
 
 - **Thread safety:** Agent fields are guarded by `RWMutex` on the `Agent` struct. The `Store` has its own `RWMutex`. Use the accessor methods, not direct field access.
 
-- **Agent status lifecycle:** `running` → `waiting` ⟷ `running` → `review_ready` → `reviewing` → `reviewed` → merge → `done`. Status transitions happen in both the monitor (pane polling/hooks) and UI (user actions).
+- **Agent status lifecycle:** `running` → `waiting` ⟷ `running` → `review_ready` → `reviewing` → `reviewed` → merge → `done`. Additional statuses: `previewing`, `conflicts`, `dismissed`. Status transitions happen in both the monitor (pane polling/hooks) and UI (user actions).
 
-- **Hybrid status monitoring:** Prefers Claude Code hook data (`.mastermind-status` JSON file written by hook script). Falls back to tmux pane content polling (every 2s) when hook data is stale (>30s).
+- **Dual sidecar files:** `.mastermind-status` (written by hook script — agent state like running/waiting/idle) and `.claude-status.json` (written by statusline script — cost/model/context data). These serve different purposes and are read by different subsystems.
+
+- **Hybrid status monitoring:** Prefers Claude Code hook data (`.mastermind-status`). Falls back to tmux pane content polling (every 2s, SHA256 stability hashing, configurable patterns) when hook data is stale (>30s).
 
 - **Logging:** Uses `log/slog` with structured logging to `.worktrees/mastermind.log`. New code should use `slog.Info`/`slog.Error`/etc. — not `fmt.Println` or `log.Println`.
 
-- **Git ignores:** All generated/runtime files (`.worktrees/`, `.claude/settings.local.json`, `.claude/hooks/`, `.mastermind-status`) are excluded via `.gitignore`. Do not use `.git/info/exclude`.
+- **Git ignores:** All generated/runtime files (`.worktrees/`, `.claude/settings.local.json`, `.claude/hooks/`, `.mastermind-status`, `.claude-status.json`) are excluded via `.gitignore`. The orchestrator also adds `.claude-status.json` to per-worktree `.git/info/exclude`.
 
 ## Required Final Steps
 
