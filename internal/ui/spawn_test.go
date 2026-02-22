@@ -17,7 +17,7 @@ func newTestSpawn(t *testing.T) spawnModel {
 	t.Helper()
 	store := agent.NewStore()
 	orch := orchestrator.New(context.Background(), store, "/repo", "test", t.TempDir())
-	return newSpawn(NewStyles(config.Default().Colors), orch, "/repo")
+	return newSpawn(NewStyles(config.Default().Colors), orch, "/repo", 120)
 }
 
 func TestSpawn_InitialStep(t *testing.T) {

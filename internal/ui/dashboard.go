@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -21,6 +23,41 @@ const (
 	sortByStatus
 	sortByDuration
 )
+
+type dashboardKeyMap struct {
+	New        key.Binding
+	Focus      key.Binding
+	Preview    key.Binding
+	Merge      key.Binding
+	Dismiss    key.Binding
+	DismissDel key.Binding
+	Sort       key.Binding
+	Quit       key.Binding
+}
+
+func newDashboardKeyMap() dashboardKeyMap {
+	return dashboardKeyMap{
+		New:        key.NewBinding(key.WithKeys("n"), key.WithHelp("n:", "new")),
+		Focus:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter:", "focus")),
+		Preview:    key.NewBinding(key.WithKeys("p"), key.WithHelp("p:", "preview")),
+		Merge:      key.NewBinding(key.WithKeys("m"), key.WithHelp("m:", "merge")),
+		Dismiss:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d:", "dismiss")),
+		DismissDel: key.NewBinding(key.WithKeys("D"), key.WithHelp("D:", "dismiss+del")),
+		Sort:       key.NewBinding(key.WithKeys("s"), key.WithHelp("s:", "sort (id)")),
+		Quit:       key.NewBinding(key.WithKeys("q"), key.WithHelp("q:", "quit")),
+	}
+}
+
+func (k dashboardKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.New, k.Focus, k.Preview, k.Merge, k.Dismiss, k.DismissDel, k.Sort, k.Quit}
+}
+
+func (k dashboardKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.New, k.Focus, k.Preview, k.Merge},
+		{k.Dismiss, k.DismissDel, k.Sort, k.Quit},
+	}
+}
 
 type notification struct {
 	text  string
@@ -43,9 +80,21 @@ type dashboardModel struct {
 	sortBy        sortMode
 	styles        Styles
 	layout        config.Layout
+	keys          dashboardKeyMap
+	help          help.Model
 }
 
 func newDashboard(s Styles, layout config.Layout, orch *orchestrator.Orchestrator, store *agent.Store, repoPath, session string) dashboardModel {
+	keys := newDashboardKeyMap()
+	h := help.New()
+	h.ShortSeparator = " │ "
+	h.Styles.ShortKey = s.HelpActive
+	h.Styles.ShortDesc = s.Help
+	h.Styles.ShortSeparator = s.Help
+	h.Styles.FullKey = s.HelpActive
+	h.Styles.FullDesc = s.Help
+	h.Styles.FullSeparator = s.Help
+	h.Styles.Ellipsis = s.Help
 	return dashboardModel{
 		store:    store,
 		orch:     orch,
@@ -53,6 +102,8 @@ func newDashboard(s Styles, layout config.Layout, orch *orchestrator.Orchestrato
 		session:  session,
 		styles:   s,
 		layout:   layout,
+		keys:     keys,
+		help:     h,
 	}
 }
 
@@ -632,10 +683,9 @@ func (m dashboardModel) ViewContent() string {
 		b.WriteString("\n")
 	}
 
-	// Help — style available actions lighter based on selected agent status
+	// Help — show available actions, hiding unavailable ones
 	b.WriteString("\n")
 
-	// Determine which actions are available for the selected agent
 	var selectedStatus agent.Status
 	hasSelection := false
 	if len(agents) > 0 && m.cursor < len(agents) {
@@ -650,38 +700,24 @@ func (m dashboardModel) ViewContent() string {
 	canMerge := hasSelection && (selectedStatus == agent.StatusReviewed ||
 		selectedStatus == agent.StatusReviewReady)
 
-	dim := m.styles.Help
-	active := m.styles.HelpActive
-	sep := dim.Render(" │ ")
+	m.keys.Focus.SetEnabled(hasSelection)
+	m.keys.Preview.SetEnabled(canPreview)
+	m.keys.Merge.SetEnabled(canMerge)
+	m.keys.Dismiss.SetEnabled(hasSelection)
+	m.keys.DismissDel.SetEnabled(hasSelection)
+	m.keys.Sort.SetHelp("s:", fmt.Sprintf("sort (%s)", m.sortLabel()))
 
-	styleFor := func(available bool) lipgloss.Style {
-		if available {
-			return active
-		}
-		return dim
-	}
+	m.help.Width = cw - 2
 
 	var helpLine string
 	if cw < 80 {
-		helpLine = "  " +
-			active.Render("n: new") + sep +
-			styleFor(hasSelection).Render("enter: focus") + sep +
-			styleFor(canPreview).Render("p: preview") + sep +
-			styleFor(canMerge).Render("m: merge") + "\n  " +
-			styleFor(hasSelection).Render("d: dismiss") + sep +
-			styleFor(hasSelection).Render("D: del") + sep +
-			active.Render(fmt.Sprintf("s: sort (%s)", m.sortLabel())) + sep +
-			active.Render("q: quit")
+		m.keys.DismissDel.SetHelp("D:", "del")
+		line1 := m.help.ShortHelpView([]key.Binding{m.keys.New, m.keys.Focus, m.keys.Preview, m.keys.Merge})
+		line2 := m.help.ShortHelpView([]key.Binding{m.keys.Dismiss, m.keys.DismissDel, m.keys.Sort, m.keys.Quit})
+		helpLine = "  " + line1 + "\n  " + line2
 	} else {
-		helpLine = "  " +
-			active.Render("n: new") + sep +
-			styleFor(hasSelection).Render("enter: focus") + sep +
-			styleFor(canPreview).Render("p: preview") + sep +
-			styleFor(canMerge).Render("m: merge") + sep +
-			styleFor(hasSelection).Render("d: dismiss") + sep +
-			styleFor(hasSelection).Render("D: dismiss+del") + sep +
-			active.Render(fmt.Sprintf("s: sort (%s)", m.sortLabel())) + sep +
-			active.Render("q: quit")
+		m.keys.DismissDel.SetHelp("D:", "dismiss+del")
+		helpLine = "  " + m.help.ShortHelpView(m.keys.ShortHelp())
 	}
 	b.WriteString(helpLine)
 

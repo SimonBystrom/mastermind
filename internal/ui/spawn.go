@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/simonbystrom/mastermind/internal/git"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
@@ -27,6 +29,22 @@ const (
 	modeNew
 )
 
+// branchItem implements list.DefaultItem for the branch picker list.
+type branchItem struct {
+	name    string
+	current bool
+}
+
+func (b branchItem) Title() string {
+	if b.current {
+		return b.name + " (current)"
+	}
+	return b.name
+}
+
+func (b branchItem) Description() string { return "" }
+func (b branchItem) FilterValue() string { return b.name }
+
 type spawnModel struct {
 	orch     *orchestrator.Orchestrator
 	repoPath string
@@ -39,11 +57,10 @@ type spawnModel struct {
 	// Mode selection
 	modeCursor int
 
-	// Branch picker (used for both existing branch and base branch selection)
+	// Branch picker
 	branches           []git.Branch
 	checkedOutBranches map[string]bool
-	branchCursor       int
-	branchFilter       textinput.Model
+	branchList         list.Model
 
 	// New branch name input
 	branchInput textinput.Model
@@ -57,20 +74,44 @@ type spawnModel struct {
 type spawnDoneMsg struct{}
 type spawnCancelMsg struct{}
 
-func newSpawn(s Styles, orch *orchestrator.Orchestrator, repoPath string) spawnModel {
-	bf := textinput.New()
-	bf.Placeholder = "filter branches..."
-
+func newSpawn(s Styles, orch *orchestrator.Orchestrator, repoPath string, width int) spawnModel {
 	bi := textinput.New()
 	bi.Placeholder = "new branch name (e.g. feat/my-feature)"
 
+	delegate := list.NewDefaultDelegate()
+	delegate.ShowDescription = false
+	delegate.SetHeight(1)
+	delegate.SetSpacing(0)
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(s.WizardActive.GetForeground()).
+		Foreground(s.WizardActive.GetForeground()).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.NormalTitle = lipgloss.NewStyle().Padding(0, 0, 0, 2)
+	delegate.Styles.DimmedTitle = lipgloss.NewStyle().
+		Foreground(s.WizardDim.GetForeground()).
+		Padding(0, 0, 0, 2)
+
+	listWidth := max(width-8, 20)
+	bl := list.New([]list.Item{}, delegate, listWidth, 15)
+	bl.SetShowTitle(false)
+	bl.SetShowStatusBar(false)
+	bl.SetShowHelp(false)
+	bl.SetFilteringEnabled(true)
+	bl.DisableQuitKeybindings()
+	bl.KeyMap.ShowFullHelp.SetEnabled(false)
+	bl.KeyMap.CloseFullHelp.SetEnabled(false)
+	bl.FilterInput.Prompt = "Filter: "
+	bl.FilterInput.PromptStyle = s.WizardActive
+
 	return spawnModel{
-		orch:         orch,
-		repoPath:     repoPath,
-		step:         stepChooseMode,
-		branchFilter: bf,
-		branchInput:  bi,
-		styles:       s,
+		orch:        orch,
+		repoPath:    repoPath,
+		step:        stepChooseMode,
+		branchInput: bi,
+		branchList:  bl,
+		styles:      s,
+		width:       width,
 	}
 }
 
@@ -88,6 +129,20 @@ func (m spawnModel) loadBranches() tea.Cmd {
 		branches, err := git.ListBranches(m.repoPath)
 		return branchesLoadedMsg{branches: branches, err: err}
 	}
+}
+
+func (m *spawnModel) setBranchListItems() tea.Cmd {
+	var items []list.Item
+	for _, b := range m.branches {
+		if m.mode == modeExisting && m.checkedOutBranches[b.Name] {
+			continue
+		}
+		items = append(items, branchItem{name: b.Name, current: b.Current})
+	}
+	cmd := m.branchList.SetItems(items)
+	m.branchList.ResetFilter()
+	m.branchList.Select(0)
+	return cmd
 }
 
 func (m spawnModel) Update(msg tea.Msg) (spawnModel, tea.Cmd) {
@@ -112,13 +167,17 @@ func (m spawnModel) Update(msg tea.Msg) (spawnModel, tea.Cmd) {
 		m.err = ""
 
 		if msg.String() == "esc" {
+			// If in branch picker with active filter, let the list handle esc
+			if m.step == stepPickBranch && (m.branchList.SettingFilter() || m.branchList.IsFiltered()) {
+				return m.updatePickBranch(msg)
+			}
 			if m.step == stepChooseMode {
 				return m, func() tea.Msg { return spawnCancelMsg{} }
 			}
 			// Go back to mode selection
 			m.step = stepChooseMode
-			m.branchCursor = 0
-			m.branchFilter.SetValue("")
+			m.branchList.ResetFilter()
+			m.branchList.Select(0)
 			m.branchInput.SetValue("")
 			return m, nil
 		}
@@ -152,8 +211,8 @@ func (m spawnModel) updateChooseMode(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 		if m.modeCursor == 0 {
 			m.mode = modeExisting
 			m.step = stepPickBranch
-			m.branchFilter.Focus()
-			return m, textinput.Blink
+			cmd := m.setBranchListItems()
+			return m, cmd
 		}
 		m.mode = modeNew
 		m.step = stepNewBranchName
@@ -164,45 +223,35 @@ func (m spawnModel) updateChooseMode(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 }
 
 func (m spawnModel) updatePickBranch(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
-	filtered := m.filteredBranches()
+	wasFiltering := m.branchList.SettingFilter()
 
-	switch msg.String() {
-	case "up", "ctrl+p":
-		if m.branchCursor > 0 {
-			m.branchCursor--
+	var cmd tea.Cmd
+	m.branchList, cmd = m.branchList.Update(msg)
+
+	isFiltering := m.branchList.SettingFilter()
+
+	// Only handle enter for branch selection when the list isn't filtering
+	if msg.String() == "enter" && !wasFiltering && !isFiltering {
+		item := m.branchList.SelectedItem()
+		if item == nil {
+			return m, cmd
 		}
-	case "down", "ctrl+n":
-		if m.branchCursor < len(filtered)-1 {
-			m.branchCursor++
-		}
-	case "enter":
-		if len(filtered) == 0 || m.branchCursor >= len(filtered) {
-			return m, nil
-		}
-		selected := filtered[m.branchCursor].Name
+		selected := item.(branchItem)
 		if m.mode == modeExisting {
-			m.branch = selected
+			m.branch = selected.name
 			m.baseBranch = ""
 			m.createBranch = false
 			m.step = stepConfirm
 			return m, nil
 		}
 		// New branch mode — this is the base branch
-		m.baseBranch = selected
+		m.baseBranch = selected.name
 		m.createBranch = true
 		m.step = stepConfirm
 		return m, nil
-	default:
-		var cmd tea.Cmd
-		m.branchFilter, cmd = m.branchFilter.Update(msg)
-		filtered := m.filteredBranches()
-		if m.branchCursor >= len(filtered) {
-			m.branchCursor = max(0, len(filtered)-1)
-		}
-		return m, cmd
 	}
 
-	return m, nil
+	return m, cmd
 }
 
 func (m spawnModel) updateNewBranchName(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
@@ -219,8 +268,8 @@ func (m spawnModel) updateNewBranchName(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 		}
 		m.branch = name
 		m.step = stepPickBranch
-		m.branchFilter.Focus()
-		return m, textinput.Blink
+		cmd := m.setBranchListItems()
+		return m, cmd
 	default:
 		var cmd tea.Cmd
 		m.branchInput, cmd = m.branchInput.Update(msg)
@@ -239,26 +288,11 @@ func (m spawnModel) updateConfirm(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 		return m, func() tea.Msg { return spawnDoneMsg{} }
 	case "n":
 		m.step = stepPickBranch
-		m.branchFilter.Focus()
-		return m, textinput.Blink
+		return m, nil
 	}
 	return m, nil
 }
 
-func (m spawnModel) filteredBranches() []git.Branch {
-	filter := strings.ToLower(strings.TrimSpace(m.branchFilter.Value()))
-	var result []git.Branch
-	for _, b := range m.branches {
-		// In existing branch mode, hide branches already checked out in a worktree
-		if m.mode == modeExisting && m.checkedOutBranches[b.Name] {
-			continue
-		}
-		if filter == "" || strings.Contains(strings.ToLower(b.Name), filter) {
-			result = append(result, b)
-		}
-	}
-	return result
-}
 
 func (m spawnModel) ViewContent() string {
 	var b strings.Builder
@@ -309,36 +343,9 @@ func (m spawnModel) ViewContent() string {
 			b.WriteString(m.styles.WizardActive.Render("Pick base branch to create from"))
 		}
 		b.WriteString("\n\n")
-		b.WriteString("  " + m.branchFilter.View())
-		b.WriteString("\n\n")
-
-		filtered := m.filteredBranches()
-		if len(filtered) == 0 {
-			b.WriteString(m.styles.WizardDim.Render("  No matching branches"))
-		} else {
-			for i, br := range filtered {
-				cursor := "  "
-				if i == m.branchCursor {
-					cursor = "> "
-				}
-				name := br.Name
-				if br.Current {
-					name += " (current)"
-				}
-				if i == m.branchCursor {
-					b.WriteString(m.styles.WizardActive.Render(cursor + name))
-				} else {
-					b.WriteString("  " + name)
-				}
-				b.WriteString("\n")
-				if i > 15 {
-					b.WriteString(m.styles.WizardDim.Render(fmt.Sprintf("  ... and %d more", len(filtered)-16)))
-					break
-				}
-			}
-		}
+		b.WriteString(m.branchList.View())
 		b.WriteString("\n")
-		b.WriteString(m.styles.Help.Render("  enter: select │ esc: back"))
+		b.WriteString(m.styles.Help.Render("  /: filter │ enter: select │ esc: back"))
 
 	case stepNewBranchName:
 		b.WriteString(m.styles.WizardDim.Render("Mode: Create new branch"))

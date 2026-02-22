@@ -65,6 +65,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dashboard.width = msg.Width
 		m.dashboard.height = msg.Height
 		m.spawn.width = msg.Width
+		if m.activeView == viewSpawn {
+			m.spawn.branchList.SetSize(max(msg.Width-8, 20), 15)
+		}
 		m.merge.width = msg.Width
 		m.dismiss.width = msg.Width
 		return m, nil
@@ -204,7 +207,7 @@ func (m AppModel) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "n":
 			m.activeView = viewSpawn
-			m.spawn = newSpawn(m.styles, m.orch, m.repoPath)
+			m.spawn = newSpawn(m.styles, m.orch, m.repoPath, m.width)
 			return m, m.spawn.Init()
 		}
 	}
