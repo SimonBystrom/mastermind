@@ -1,8 +1,8 @@
 package tmux
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -24,14 +24,14 @@ var completionVerbRegex = regexp.MustCompile(`(?i)^\d+\.\s+(fixed|added|updated|
 // If it's stable, we classify what it's waiting for.
 type PaneMonitor struct {
 	mu          sync.Mutex
-	lastHash    map[string]string // paneID → sha256 of last capture
+	lastContent map[string][]byte // paneID → raw content of last capture
 	stableCount map[string]int    // paneID → number of consecutive polls with same content
 	Patterns    MonitorPatterns
 }
 
 func NewPaneMonitor() *PaneMonitor {
 	return &PaneMonitor{
-		lastHash:    make(map[string]string),
+		lastContent: make(map[string][]byte),
 		stableCount: make(map[string]int),
 		Patterns:    DefaultPatterns,
 	}
@@ -40,7 +40,7 @@ func NewPaneMonitor() *PaneMonitor {
 func (m *PaneMonitor) Remove(paneID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.lastHash, paneID)
+	delete(m.lastContent, paneID)
 	delete(m.stableCount, paneID)
 }
 
@@ -82,28 +82,33 @@ type classifyInfo struct {
 
 func (m *PaneMonitor) detectWaiting(paneID string) classifyInfo {
 	content := capturePane(paneID)
-	if content == "" {
+	if len(content) == 0 {
 		return classifyInfo{}
 	}
 
-	// Hash the content and compare with previous capture
-	hash := hashContent(content)
-
+	// Compare raw bytes with previous capture (replaces SHA-256 hashing)
 	m.mu.Lock()
-	prev, hasPrev := m.lastHash[paneID]
-	m.lastHash[paneID] = hash
-	if hasPrev && prev == hash {
-		m.stableCount[paneID]++
-	} else {
+	prev, hasPrev := m.lastContent[paneID]
+	changed := !hasPrev || !bytes.Equal(content, prev)
+	if changed {
+		// Store a copy to avoid aliasing the exec output buffer
+		cp := make([]byte, len(content))
+		copy(cp, content)
+		m.lastContent[paneID] = cp
 		m.stableCount[paneID] = 0
+	} else {
+		m.stableCount[paneID]++
 	}
 	stable := m.stableCount[paneID]
 	m.mu.Unlock()
 
+	// Only convert to string when we need classification
+	contentStr := string(content)
+
 	// Check for high-confidence permission patterns even before content
 	// stabilizes — some prompts have subtle animation (cursor, spinner)
-	// that prevents the hash from settling.
-	if waiting := m.classifyUnstablePane(content); waiting != "" {
+	// that prevents content from settling.
+	if waiting := m.classifyUnstablePane(contentStr); waiting != "" {
 		return classifyInfo{waitingFor: waiting}
 	}
 
@@ -114,7 +119,7 @@ func (m *PaneMonitor) detectWaiting(paneID string) classifyInfo {
 	}
 
 	// Content is stable — classify what Claude is waiting for
-	return m.classifyStablePane(content)
+	return m.classifyStablePane(contentStr)
 }
 
 // classifyUnstablePane checks for high-confidence patterns that indicate
@@ -271,17 +276,12 @@ var statuslineRegex = regexp.MustCompile(`➜\s+\S+\s+(?:git:\([^)]+\)\s+)?\[ctx
 // ➜  dirname git:(branch) [ctx: XX%] $X.XXXX  model
 var statuslineNoDiffRegex = regexp.MustCompile(`➜\s+\S+\s+(?:git:\([^)]+\)\s+)?\[ctx:\s+(\d+)%\]\s+\$([0-9.]+)\s+(.+)`)
 
-func capturePane(paneID string) string {
+func capturePane(paneID string) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "tmux", "capture-pane", "-t", paneID, "-p").Output()
 	if err != nil {
-		return ""
+		return nil
 	}
-	return string(out)
-}
-
-func hashContent(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return fmt.Sprintf("%x", h[:8])
+	return out
 }

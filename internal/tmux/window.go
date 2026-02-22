@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -108,22 +109,31 @@ func PaneExistsInWindow(paneID, windowID string) bool {
 	return false
 }
 
-// ListAllPanes returns a map of pane ID → window ID for all panes in the session.
-// This allows batch existence checks with a single tmux subprocess.
-func ListAllPanes(session string) (map[string]string, error) {
-	out, err := exec.Command("tmux", "list-panes", "-s", "-t", session, "-F", "#{pane_id}|#{window_id}").Output()
+// ListAllPanes returns a map of pane ID → PaneInfo for all panes in the session.
+// This allows batch existence + dead-pane checks with a single tmux subprocess.
+func ListAllPanes(session string) (map[string]PaneInfo, error) {
+	out, err := exec.Command("tmux", "list-panes", "-s", "-t", session, "-F", "#{pane_id}|#{window_id}|#{pane_dead}|#{pane_dead_status}").Output()
 	if err != nil {
 		return nil, fmt.Errorf("list-panes: %w", err)
 	}
-	result := make(map[string]string)
+	result := make(map[string]PaneInfo)
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "|", 2)
-		if len(parts) == 2 {
-			result[parts[0]] = parts[1]
+		parts := strings.SplitN(line, "|", 4)
+		if len(parts) < 2 {
+			continue
 		}
+		info := PaneInfo{WindowID: parts[1]}
+		if len(parts) >= 3 && parts[2] == "1" {
+			info.Dead = true
+			if len(parts) >= 4 && parts[3] != "" {
+				code, _ := strconv.Atoi(parts[3])
+				info.ExitCode = code
+			}
+		}
+		result[parts[0]] = info
 	}
 	return result, nil
 }

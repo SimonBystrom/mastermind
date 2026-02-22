@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,19 @@ const (
 	sortByStatus
 	sortByDuration
 )
+
+// statusOrder is used for status-based sorting (hoisted from sortedAgents).
+var statusOrder = map[agent.Status]int{
+	agent.StatusConflicts:   0,
+	agent.StatusWaiting:     1,
+	agent.StatusPreviewing:  2,
+	agent.StatusReviewed:    3,
+	agent.StatusReviewReady: 4,
+	agent.StatusRunning:     5,
+	agent.StatusReviewing:   6,
+	agent.StatusDone:        7,
+	agent.StatusDismissed:   8,
+}
 
 type dashboardKeyMap struct {
 	New        key.Binding
@@ -82,6 +96,10 @@ type dashboardModel struct {
 	layout        config.Layout
 	keys          dashboardKeyMap
 	help          help.Model
+
+	// Cached logo render — invalidated on resize
+	cachedLogo      string
+	cachedLogoWidth int
 }
 
 func newDashboard(s Styles, layout config.Layout, orch *orchestrator.Orchestrator, store *agent.Store, repoPath, session string) dashboardModel {
@@ -223,6 +241,28 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		m.err = msg.Error
 		return m, nil
 
+	case orchestrator.CleanupMsg:
+		if len(msg.Results) > 0 {
+			for _, r := range msg.Results {
+				m.addNotification(notification{
+					text:  fmt.Sprintf("Cleaned up %s (%s)", r.AgentName, r.Reason),
+					time:  time.Now(),
+					style: m.styles.Done,
+				})
+			}
+			agents := m.sortedAgents()
+			if m.cursor >= len(agents) && m.cursor > 0 {
+				m.cursor = len(agents) - 1
+			}
+		} else {
+			m.addNotification(notification{
+				text:  "No dead agents found",
+				time:  time.Now(),
+				style: m.styles.Done,
+			})
+		}
+		return m, nil
+
 	case orchestrator.AgentWaitingMsg:
 		name := msg.AgentID
 		var text string
@@ -318,25 +358,9 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 				}
 			}
 		case "c":
-			results := m.orch.CleanupDeadAgents()
-			if len(results) > 0 {
-				for _, r := range results {
-					m.addNotification(notification{
-						text:  fmt.Sprintf("Cleaned up %s (%s)", r.AgentName, r.Reason),
-						time:  time.Now(),
-						style: m.styles.Done,
-					})
-				}
-				agents = m.sortedAgents()
-				if m.cursor >= len(agents) && m.cursor > 0 {
-					m.cursor = len(agents) - 1
-				}
-			} else {
-				m.addNotification(notification{
-					text:  "No dead agents found",
-					time:  time.Now(),
-					style: m.styles.Done,
-				})
+			return m, func() tea.Msg {
+				results := m.orch.CleanupDeadAgents()
+				return orchestrator.CleanupMsg{Results: results}
 			}
 		case "p":
 			if len(agents) > 0 && m.cursor < len(agents) {
@@ -384,17 +408,6 @@ func (m dashboardModel) sortedAgents() []*agent.Agent {
 	agents := m.store.All()
 	switch m.sortBy {
 	case sortByStatus:
-		statusOrder := map[agent.Status]int{
-			agent.StatusConflicts:   0,
-			agent.StatusWaiting:     1,
-			agent.StatusPreviewing:  2,
-			agent.StatusReviewed:    3,
-			agent.StatusReviewReady: 4,
-			agent.StatusRunning:     5,
-			agent.StatusReviewing:   6,
-			agent.StatusDone:        7,
-			agent.StatusDismissed:   8,
-		}
 		sort.Slice(agents, func(i, j int) bool {
 			oi := statusOrder[agents[i].GetStatus()]
 			oj := statusOrder[agents[j].GetStatus()]
@@ -442,7 +455,16 @@ func (m dashboardModel) ViewContent() string {
 
 	cw := m.contentWidth()
 
-	chosenLogo := renderLogo(cw)
+	var chosenLogo string
+	if cw == m.cachedLogoWidth && m.cachedLogo != "" {
+		chosenLogo = m.cachedLogo
+	} else {
+		chosenLogo = renderLogo(cw)
+		// Cache will persist only within this copy of the model (Bubble Tea value semantics).
+		// Still saves the re-render for multiple ViewContent calls within the same frame.
+		m.cachedLogo = chosenLogo
+		m.cachedLogoWidth = cw
+	}
 	b.WriteString(m.styles.Logo.Render(chosenLogo))
 	b.WriteString("\n\n")
 
@@ -739,7 +761,11 @@ func formatDuration(d time.Duration) string {
 	d = d.Round(time.Second)
 	m := int(d.Minutes())
 	s := int(d.Seconds()) % 60
-	return fmt.Sprintf("%dm %02ds", m, s)
+	sec := strconv.Itoa(s)
+	if s < 10 {
+		sec = "0" + sec
+	}
+	return strconv.Itoa(m) + "m " + sec + "s"
 }
 
 func truncate(s string, max int) string {

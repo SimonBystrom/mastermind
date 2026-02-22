@@ -1,5 +1,12 @@
 package tmux
 
+// PaneInfo holds metadata about a tmux pane returned by ListAllPanes.
+type PaneInfo struct {
+	WindowID string
+	Dead     bool
+	ExitCode int
+}
+
 // TmuxOps abstracts tmux window/pane operations for testing.
 type TmuxOps interface {
 	NewWindow(session, name, dir string, command []string) (string, error)
@@ -11,7 +18,7 @@ type TmuxOps interface {
 	SelectPane(paneID string) error
 	PaneExistsInWindow(paneID, windowID string) bool
 	WindowIDForPane(paneID string) (string, error)
-	ListAllPanes(session string) (map[string]string, error)
+	ListAllPanes(session string) (map[string]PaneInfo, error)
 	ListPanesInWindow(windowID string) ([]string, error)
 }
 
@@ -60,7 +67,7 @@ func (RealTmux) WindowIDForPane(paneID string) (string, error) {
 	return WindowIDForPane(paneID)
 }
 
-func (RealTmux) ListAllPanes(session string) (map[string]string, error) {
+func (RealTmux) ListAllPanes(session string) (map[string]PaneInfo, error) {
 	return ListAllPanes(session)
 }
 

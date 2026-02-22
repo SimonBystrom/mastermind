@@ -260,7 +260,7 @@ func (m *mockTmux) WindowIDForPane(paneID string) (string, error) {
 	return m.windowIDForPane, nil
 }
 
-func (m *mockTmux) ListAllPanes(session string) (map[string]string, error) {
+func (m *mockTmux) ListAllPanes(session string) (map[string]tmux.PaneInfo, error) {
 	m.record("ListAllPanes:" + session)
 	return nil, fmt.Errorf("not available in mock")
 }

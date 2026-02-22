@@ -175,21 +175,6 @@ func TestClassifyUnstablePane(t *testing.T) {
 	}
 }
 
-func TestHashContent(t *testing.T) {
-	h1 := hashContent("hello world")
-	h2 := hashContent("hello world")
-	h3 := hashContent("different content")
-
-	if h1 != h2 {
-		t.Errorf("same input produced different hashes: %q vs %q", h1, h2)
-	}
-	if h1 == h3 {
-		t.Error("different inputs produced same hash")
-	}
-	if h1 == "" {
-		t.Error("hash should not be empty")
-	}
-}
 
 func TestParseStatuslineFromContent(t *testing.T) {
 	tests := []struct {
@@ -289,7 +274,7 @@ func TestPaneMonitor_Remove(t *testing.T) {
 
 	// Simulate some internal state
 	m.mu.Lock()
-	m.lastHash["%0"] = "abc"
+	m.lastContent["%0"] = []byte("abc")
 	m.stableCount["%0"] = 3
 	m.mu.Unlock()
 
@@ -297,8 +282,8 @@ func TestPaneMonitor_Remove(t *testing.T) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.lastHash["%0"]; ok {
-		t.Error("Remove should clear lastHash entry")
+	if _, ok := m.lastContent["%0"]; ok {
+		t.Error("Remove should clear lastContent entry")
 	}
 	if _, ok := m.stableCount["%0"]; ok {
 		t.Error("Remove should clear stableCount entry")

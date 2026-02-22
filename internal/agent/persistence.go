@@ -52,7 +52,7 @@ func SaveState(path string, agents []*Agent) error {
 		}
 	}
 
-	data, err := json.MarshalIndent(persisted, "", "  ")
+	data, err := json.Marshal(persisted)
 	if err != nil {
 		return fmt.Errorf("marshal state: %w", err)
 	}

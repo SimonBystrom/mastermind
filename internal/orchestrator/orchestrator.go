@@ -62,6 +62,12 @@ type PreviewStartedMsg struct{ AgentID string }
 type PreviewStoppedMsg  struct{ AgentID string }
 type PreviewErrorMsg    struct{ AgentID string; Error string }
 
+// mtimeEntry caches the result of a file read keyed by its mtime.
+type mtimeEntry struct {
+	mtime  time.Time
+	result interface{}
+}
+
 type Orchestrator struct {
 	ctx         context.Context
 	store       *agent.Store
@@ -76,6 +82,12 @@ type Orchestrator struct {
 	lazygitSplit int
 	agentTeams   bool
 	teammateMode string
+
+	// Performance caches (monitor loop only, no mutex needed)
+	idleHasChanges     map[string]*bool       // agentID → cached HasChanges result for idle agents
+	hookMtimeCache     map[string]mtimeEntry   // worktreePath → cached hook status
+	statuslineMtimeCache map[string]mtimeEntry // worktreePath → cached statusline data
+	lastSaveTime       time.Time               // debounce state persistence
 
 	previewMu         sync.RWMutex
 	previewAgentID    string // ID of agent being previewed (empty = no preview)
@@ -120,18 +132,21 @@ func WithTeammateMode(mode string) Option {
 
 func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
-		ctx:          ctx,
-		store:        store,
-		repoPath:     repoPath,
-		session:      session,
-		worktreeDir:  worktreeDir,
-		monitor:      tmux.NewPaneMonitor(),
-		statePath:    worktreeDir + "/mastermind-state.json",
-		git:          git.RealGit{},
-		tmux:         tmux.RealTmux{},
-		lazygitSplit: 80,
-		agentTeams:   true,
-		teammateMode: "in-process",
+		ctx:                  ctx,
+		store:                store,
+		repoPath:             repoPath,
+		session:              session,
+		worktreeDir:          worktreeDir,
+		monitor:              tmux.NewPaneMonitor(),
+		statePath:            worktreeDir + "/mastermind-state.json",
+		git:                  git.RealGit{},
+		tmux:                 tmux.RealTmux{},
+		lazygitSplit:         80,
+		agentTeams:           true,
+		teammateMode:         "in-process",
+		idleHasChanges:       make(map[string]*bool),
+		hookMtimeCache:       make(map[string]mtimeEntry),
+		statuslineMtimeCache: make(map[string]mtimeEntry),
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -300,6 +315,10 @@ func (o *Orchestrator) StartMonitor() {
 	for {
 		select {
 		case <-o.ctx.Done():
+			// Force-save on shutdown regardless of debounce
+			if o.store.IsDirty() {
+				o.doSaveState()
+			}
 			slog.Info("monitor stopped: context cancelled")
 			return
 		case <-ticker.C:
@@ -307,7 +326,7 @@ func (o *Orchestrator) StartMonitor() {
 
 		agents := o.store.All()
 
-		// Batch-fetch all panes in the session to avoid N individual list-panes calls
+		// Batch-fetch all panes in the session (1 subprocess) — now includes dead/exit status
 		allPanes, paneListErr := o.tmux.ListAllPanes(o.session)
 		if paneListErr != nil {
 			slog.Debug("ListAllPanes failed, falling back to per-agent checks", "error", paneListErr)
@@ -318,31 +337,48 @@ func (o *Orchestrator) StartMonitor() {
 		// using the batch result when available.
 		paneInWindow := func(paneID, windowID string) bool {
 			if allPanes != nil {
-				return allPanes[paneID] == windowID
+				info, ok := allPanes[paneID]
+				return ok && info.WindowID == windowID
 			}
 			return o.tmux.PaneExistsInWindow(paneID, windowID)
 		}
 
+		// paneDeadFromBatch returns dead status from batch result, or falls back to GetPaneStatus.
+		paneDeadFromBatch := func(paneID string) (dead bool, exitCode int, err error) {
+			if allPanes != nil {
+				if info, ok := allPanes[paneID]; ok {
+					return info.Dead, info.ExitCode, nil
+				}
+				// Pane not in batch = gone
+				return false, 0, fmt.Errorf("pane not in session")
+			}
+			// Fallback: individual subprocess call
+			ps, err := o.monitor.GetPaneStatus(paneID)
+			if err != nil {
+				return false, 0, err
+			}
+			return ps.Dead, ps.ExitCode, nil
+		}
+
 		for _, a := range agents {
-			status := a.GetStatus()
+			snap := a.Snapshot()
 
 			// Handle lazygit pane detection for reviewing/conflicts agents
-			if (status == agent.StatusReviewing || status == agent.StatusConflicts) && a.GetLazygitPaneID() != "" {
-				lgGone := !paneInWindow(a.GetLazygitPaneID(), a.TmuxWindow)
+			if (snap.Status == agent.StatusReviewing || snap.Status == agent.StatusConflicts) && snap.LazygitPaneID != "" {
+				lgGone := !paneInWindow(snap.LazygitPaneID, a.TmuxWindow)
 				if !lgGone {
 					// Pane exists but may be dead (remain-on-exit keeps it around).
-					lgStatus, err := o.monitor.GetPaneStatus(a.GetLazygitPaneID())
-					lgGone = err != nil || lgStatus.Dead
+					dead, _, err := paneDeadFromBatch(snap.LazygitPaneID)
+					lgGone = err != nil || dead
 				}
 				if lgGone {
-					// Kill the dead lazygit pane if it's still lingering
-					o.tmux.KillPane(a.GetLazygitPaneID())
-					o.handleLazygitClosed(a, status)
+					o.tmux.KillPane(snap.LazygitPaneID)
+					o.handleLazygitClosed(a, snap.Status)
 				}
 				continue
 			}
 
-			switch status {
+			switch snap.Status {
 			case agent.StatusRunning, agent.StatusWaiting,
 				agent.StatusReviewReady, agent.StatusDone:
 				// These statuses need monitoring
@@ -350,50 +386,63 @@ func (o *Orchestrator) StartMonitor() {
 				continue
 			}
 
-			// Check if pane still exists (hooks can't detect this)
+			// Check if pane still exists
 			if !paneInWindow(a.TmuxPaneID, a.TmuxWindow) {
 				slog.Debug("pane gone, marking dismissed", "id", a.ID, "pane", a.TmuxPaneID)
 				o.monitor.Remove(a.TmuxPaneID)
 				a.SetStatus(agent.StatusDismissed)
 				o.store.MarkDirty()
+				delete(o.idleHasChanges, a.ID)
 				if o.program != nil {
 					o.program.Send(AgentGoneMsg{AgentID: a.ID})
 				}
 				continue
 			}
 
-			// Check for dead pane (hooks can't detect this either)
-			paneStatus, err := o.monitor.GetPaneStatus(a.TmuxPaneID)
+			// Check for dead pane from batch result (no extra subprocess)
+			dead, exitCode, err := paneDeadFromBatch(a.TmuxPaneID)
 			if err != nil {
 				slog.Debug("pane gone, marking dismissed", "id", a.ID, "pane", a.TmuxPaneID)
 				o.monitor.Remove(a.TmuxPaneID)
 				a.SetStatus(agent.StatusDismissed)
 				o.store.MarkDirty()
+				delete(o.idleHasChanges, a.ID)
 				if o.program != nil {
 					o.program.Send(AgentGoneMsg{AgentID: a.ID})
 				}
 				continue
 			}
 
-			if paneStatus.Dead {
-				o.handleAgentFinished(a, paneStatus.ExitCode)
+			if dead {
+				o.handleAgentFinished(a, exitCode)
 				continue
 			}
 
-			// Try hook-based status detection first
-			if o.handleHookStatus(a, status) {
-				// Read statusline sidecar file
-				if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
-					a.SetStatuslineData(sd)
-				}
+			// Try hook-based status detection first (skip tmux capture if fresh)
+			if o.handleHookStatus(a, snap.Status) {
+				o.readStatuslineCached(a)
 				continue
 			}
 
 			// Fall back to tmux content polling
+			paneStatus, err := o.monitor.GetPaneStatus(a.TmuxPaneID)
+			if err != nil {
+				slog.Debug("pane status error, marking dismissed", "id", a.ID, "pane", a.TmuxPaneID)
+				o.monitor.Remove(a.TmuxPaneID)
+				a.SetStatus(agent.StatusDismissed)
+				o.store.MarkDirty()
+				delete(o.idleHasChanges, a.ID)
+				if o.program != nil {
+					o.program.Send(AgentGoneMsg{AgentID: a.ID})
+				}
+				continue
+			}
+
 			if paneStatus.WaitingFor == "" {
 				// Claude is actively working
 				a.SetEverActive(true)
-				if status != agent.StatusRunning {
+				delete(o.idleHasChanges, a.ID)
+				if snap.Status != agent.StatusRunning {
 					a.SetStatus(agent.StatusRunning)
 					a.SetWaitingFor("")
 					o.store.MarkDirty()
@@ -401,7 +450,7 @@ func (o *Orchestrator) StartMonitor() {
 				}
 			} else if paneStatus.WaitingFor == "permission" {
 				a.SetEverActive(true)
-				if status != agent.StatusWaiting || a.GetWaitingFor() != "permission" {
+				if snap.Status != agent.StatusWaiting || snap.WaitingFor != "permission" {
 					a.SetStatus(agent.StatusWaiting)
 					a.SetWaitingFor("permission")
 					o.store.MarkDirty()
@@ -413,19 +462,15 @@ func (o *Orchestrator) StartMonitor() {
 						})
 					}
 				}
-			} else if a.GetEverActive() {
+			} else if snap.EverActive {
 				o.handleAgentIdle(a)
 			}
 
-			// Read statusline sidecar file
-			if sd, err := agent.ReadStatuslineFile(a.WorktreePath); err == nil {
-				a.SetStatuslineData(sd)
-				o.store.MarkDirty()
-			}
+			o.readStatuslineCached(a)
 		}
 
 		if o.store.IsDirty() {
-			o.saveState()
+			o.saveStateDebounced()
 			o.store.ClearDirty()
 		}
 	}
@@ -435,11 +480,7 @@ func (o *Orchestrator) StartMonitor() {
 // state accordingly. Returns true if hook status was available and handled,
 // false if we should fall back to tmux polling.
 func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) bool {
-	sf, err := hook.ReadStatus(a.WorktreePath)
-	if err != nil {
-		slog.Debug("hook status read error, falling back to tmux", "id", a.ID, "error", err)
-		return false
-	}
+	sf := o.readHookStatusCached(a.WorktreePath)
 	if sf == nil || sf.IsStale() {
 		return false
 	}
@@ -447,6 +488,7 @@ func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) boo
 	switch sf.Status {
 	case hook.StatusRunning:
 		a.SetEverActive(true)
+		delete(o.idleHasChanges, a.ID)
 		if status != agent.StatusRunning {
 			a.SetStatus(agent.StatusRunning)
 			a.SetWaitingFor("")
@@ -491,10 +533,62 @@ func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) boo
 	return true
 }
 
+// readHookStatusCached reads the hook status file, using mtime to skip re-reads.
+func (o *Orchestrator) readHookStatusCached(worktreePath string) *hook.StatusFile {
+	path := filepath.Join(worktreePath, ".mastermind-status")
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	mtime := info.ModTime()
+	if cached, ok := o.hookMtimeCache[worktreePath]; ok && cached.mtime.Equal(mtime) {
+		if sf, ok := cached.result.(*hook.StatusFile); ok {
+			return sf
+		}
+		return nil
+	}
+	sf, err := hook.ReadStatus(worktreePath)
+	if err != nil {
+		slog.Debug("hook status read error", "path", worktreePath, "error", err)
+		o.hookMtimeCache[worktreePath] = mtimeEntry{mtime: mtime, result: (*hook.StatusFile)(nil)}
+		return nil
+	}
+	o.hookMtimeCache[worktreePath] = mtimeEntry{mtime: mtime, result: sf}
+	return sf
+}
+
+// readStatuslineCached reads the statusline sidecar file, using mtime to skip re-reads.
+func (o *Orchestrator) readStatuslineCached(a *agent.Agent) {
+	path := filepath.Join(a.WorktreePath, ".claude-status.json")
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	mtime := info.ModTime()
+	if cached, ok := o.statuslineMtimeCache[a.WorktreePath]; ok && cached.mtime.Equal(mtime) {
+		if sd, ok := cached.result.(*agent.StatuslineData); ok && sd != nil {
+			a.SetStatuslineData(sd)
+		}
+		return
+	}
+	sd, err := agent.ReadStatuslineFile(a.WorktreePath)
+	if err != nil {
+		o.statuslineMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: (*agent.StatuslineData)(nil)}
+		return
+	}
+	a.SetStatuslineData(sd)
+	o.store.MarkDirty()
+	o.statuslineMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: sd}
+}
+
 func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 	a.SetFinished(exitCode, time.Now())
 
 	hasChanges := o.git.HasChanges(a.WorktreePath)
+	// Cache the result for subsequent idle checks
+	hc := hasChanges
+	o.idleHasChanges[a.ID] = &hc
+
 	if hasChanges {
 		a.SetStatus(agent.StatusReviewReady)
 	} else {
@@ -518,7 +612,17 @@ func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 	if a.GetStatus() == agent.StatusReviewed {
 		return
 	}
-	hasChanges := o.git.HasChanges(a.WorktreePath)
+
+	// Use cached HasChanges result for idle agents to avoid redundant git status calls
+	var hasChanges bool
+	if cached := o.idleHasChanges[a.ID]; cached != nil {
+		hasChanges = *cached
+	} else {
+		hasChanges = o.git.HasChanges(a.WorktreePath)
+		hc := hasChanges
+		o.idleHasChanges[a.ID] = &hc
+	}
+
 	if hasChanges {
 		if a.GetStatus() != agent.StatusReviewReady {
 			a.SetStatus(agent.StatusReviewReady)
@@ -1036,10 +1140,24 @@ func (o *Orchestrator) RecoverAgents() {
 }
 
 func (o *Orchestrator) saveState() {
+	o.doSaveState()
+}
+
+// saveStateDebounced only writes if at least 5s have passed since last save.
+// Used in the monitor loop to reduce I/O. Force-saves happen via doSaveState.
+func (o *Orchestrator) saveStateDebounced() {
+	if time.Since(o.lastSaveTime) < 5*time.Second {
+		return
+	}
+	o.doSaveState()
+}
+
+func (o *Orchestrator) doSaveState() {
 	agents := o.store.All()
 	if err := agent.SaveState(o.statePath, agents); err != nil {
 		slog.Error("failed to save state", "error", err)
 	}
+	o.lastSaveTime = time.Now()
 }
 
 // writeClaudeProjectSettings writes .claude/settings.json in the worktree

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -163,7 +164,7 @@ func CopyUncommittedChanges(srcWT, dstWT string) error {
 		return nil
 	}
 	cmd := exec.Command("git", "-C", dstWT, "apply", "--allow-empty")
-	cmd.Stdin = strings.NewReader(string(diff))
+	cmd.Stdin = bytes.NewReader(diff)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("apply uncommitted changes: %s (%w)", strings.TrimSpace(string(out)), err)

@@ -64,8 +64,8 @@ printf '{"status":"%s","ts":%s}\n' "$STATUS" "$TS" > "$TMP_FILE"
 mv "$TMP_FILE" "$STATUS_FILE"
 `
 
-// settingsJSON is the .claude/settings.local.json content that registers hooks.
-var settingsJSON = map[string]interface{}{
+// settingsJSONMap is the .claude/settings.local.json content that registers hooks.
+var settingsJSONMap = map[string]interface{}{
 	"hooks": map[string]interface{}{
 		"PreToolUse": []map[string]interface{}{
 			{"hooks": []map[string]interface{}{
@@ -103,6 +103,17 @@ var settingsJSON = map[string]interface{}{
 	},
 }
 
+// settingsJSONBytes is the pre-computed JSON encoding of settingsJSONMap.
+var settingsJSONBytes []byte
+
+func init() {
+	var err error
+	settingsJSONBytes, err = json.MarshalIndent(settingsJSONMap, "", "  ")
+	if err != nil {
+		panic("hook: failed to marshal settings JSON: " + err.Error())
+	}
+}
+
 // WriteHookFiles writes the hook script and settings.local.json into the
 // worktree so that Claude Code instances spawned there report status via hooks.
 func WriteHookFiles(worktreePath string) error {
@@ -117,16 +128,11 @@ func WriteHookFiles(worktreePath string) error {
 		return fmt.Errorf("write hook script: %w", err)
 	}
 
-	// Write settings.local.json
+	// Write settings.local.json (uses pre-computed bytes)
 	claudeDir := filepath.Join(worktreePath, ".claude")
 	settingsPath := filepath.Join(claudeDir, "settings.local.json")
 
-	data, err := json.MarshalIndent(settingsJSON, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal settings: %w", err)
-	}
-
-	if err := os.WriteFile(settingsPath, data, 0o644); err != nil {
+	if err := os.WriteFile(settingsPath, settingsJSONBytes, 0o644); err != nil {
 		return fmt.Errorf("write settings: %w", err)
 	}
 

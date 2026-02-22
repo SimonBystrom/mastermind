@@ -230,6 +230,9 @@ type AgentSnapshot struct {
 	PreReviewCommit     string
 	AccumulatedDuration time.Duration
 	RunningStartedAt    time.Time
+	StatuslineData      *StatuslineData
+	MergeDeleteBranch   bool
+	MergeRemoveWorktree bool
 }
 
 // Snapshot reads all mutable fields under a single lock acquisition.
@@ -246,6 +249,9 @@ func (a *Agent) Snapshot() AgentSnapshot {
 		PreReviewCommit:     a.preReviewCommit,
 		AccumulatedDuration: a.accumulatedDuration,
 		RunningStartedAt:    a.runningStartedAt,
+		StatuslineData:      a.statuslineData,
+		MergeDeleteBranch:   a.mergeDeleteBranch,
+		MergeRemoveWorktree: a.mergeRemoveWorktree,
 	}
 }
 
