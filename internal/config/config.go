@@ -45,8 +45,9 @@ type Layout struct {
 
 // Claude holds settings for Claude Code agent behavior.
 type Claude struct {
-	AgentTeams   bool   `toml:"agent_teams"`
-	TeammateMode string `toml:"teammate_mode"`
+	AgentTeams      bool   `toml:"agent_teams"`
+	TeammateMode    string `toml:"teammate_mode"`
+	SkipPermissions bool   `toml:"skip_permissions"`
 }
 
 // Config is the top-level configuration.
@@ -165,8 +166,9 @@ const defaultFileContent = `# Mastermind configuration
 # lazygit_split   = 80   # percentage for lazygit pane size
 
 [claude]
-# agent_teams   = true   # enable Claude Code agent teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS)
-# teammate_mode = "in-process"  # teammate mode for agent team collaboration
+# agent_teams      = true   # enable Claude Code agent teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS)
+# teammate_mode    = "in-process"  # teammate mode for agent team collaboration
+# skip_permissions = false  # pass --dangerously-skip-permissions to all spawned agents
 `
 
 // WriteDefault writes the default config file with all values commented out.

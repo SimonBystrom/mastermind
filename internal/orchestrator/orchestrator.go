@@ -80,8 +80,9 @@ type Orchestrator struct {
 	git          git.GitOps
 	tmux         tmux.TmuxOps
 	lazygitSplit int
-	agentTeams   bool
-	teammateMode string
+	agentTeams      bool
+	teammateMode    string
+	skipPermissions bool
 
 	// Performance caches (monitor loop only, no mutex needed)
 	idleHasChanges     map[string]*bool       // agentID → cached HasChanges result for idle agents
@@ -128,6 +129,11 @@ func WithAgentTeams(enabled bool) Option {
 // WithTeammateMode sets the teammate mode for Claude Code split-pane collaboration.
 func WithTeammateMode(mode string) Option {
 	return func(o *Orchestrator) { o.teammateMode = mode }
+}
+
+// WithSkipPermissions passes --dangerously-skip-permissions to all spawned agents.
+func WithSkipPermissions(enabled bool) Option {
+	return func(o *Orchestrator) { o.skipPermissions = enabled }
 }
 
 func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
@@ -193,7 +199,11 @@ func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) 
 		slog.Warn("failed to write hook files, falling back to tmux polling", "error", err)
 	}
 
-	paneID, err := o.tmux.NewWindow(o.session, branch, wtPath, []string{"claude"})
+	claudeCmd := []string{"claude"}
+	if o.skipPermissions {
+		claudeCmd = append(claudeCmd, "--dangerously-skip-permissions")
+	}
+	paneID, err := o.tmux.NewWindow(o.session, branch, wtPath, claudeCmd)
 	if err != nil {
 		o.git.RemoveWorktree(o.repoPath, wtPath)
 		return fmt.Errorf("create tmux window: %w", err)

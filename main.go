@@ -129,6 +129,7 @@ func main() {
 		orchestrator.WithLazygitSplit(cfg.Layout.LazygitSplit),
 		orchestrator.WithAgentTeams(cfg.Claude.AgentTeams),
 		orchestrator.WithTeammateMode(cfg.Claude.TeammateMode),
+		orchestrator.WithSkipPermissions(cfg.Claude.SkipPermissions),
 	)
 
 	// Recover agents from previous session
