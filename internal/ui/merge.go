@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
@@ -13,6 +14,7 @@ type mergeStep int
 
 const (
 	mergeStepConfirm mergeStep = iota
+	mergeStepMerging
 	mergeStepConflicts
 )
 
@@ -36,6 +38,9 @@ type mergeModel struct {
 
 	// Conflict info
 	conflictFiles []string
+
+	// Spinner shown during merge
+	spinner spinner.Model
 }
 
 type mergeDoneMsg struct{}
@@ -50,6 +55,8 @@ type startMergeMsg struct {
 }
 
 func newMerge(s Styles, orch *orchestrator.Orchestrator, repoPath string, msg startMergeMsg) mergeModel {
+	sp := spinner.New()
+	sp.Spinner = spinner.MiniDot
 	return mergeModel{
 		orch:           orch,
 		repoPath:       repoPath,
@@ -61,6 +68,7 @@ func newMerge(s Styles, orch *orchestrator.Orchestrator, repoPath string, msg st
 		deleteBranch:   true,
 		removeWorktree: true,
 		styles:         s,
+		spinner:        sp,
 	}
 }
 
@@ -78,12 +86,25 @@ func (m mergeModel) Update(msg tea.Msg) (mergeModel, tea.Cmd) {
 			m.conflictFiles = msg.ConflictFiles
 			return m, nil
 		}
+		m.step = mergeStepConfirm
 		if msg.Error != "" {
 			m.err = msg.Error
 		}
 		return m, nil
 
+	case spinner.TickMsg:
+		if m.step == mergeStepMerging {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+
 	case tea.KeyMsg:
+		if m.step == mergeStepMerging {
+			return m, nil
+		}
+
 		m.err = ""
 
 		if msg.String() == "esc" {
@@ -118,12 +139,14 @@ func (m mergeModel) updateConfirm(msg tea.KeyMsg) (mergeModel, tea.Cmd) {
 			m.deleteBranch = !m.deleteBranch
 		}
 	case "y", "enter":
+		m.step = mergeStepMerging
 		mergeID := m.agentID
 		delBranch := m.deleteBranch
 		removeWT := m.removeWorktree
-		return m, func() tea.Msg {
+		mergeCmd := func() tea.Msg {
 			return m.orch.MergeAgent(mergeID, delBranch, removeWT)
 		}
+		return m, tea.Batch(m.spinner.Tick, mergeCmd)
 	}
 	return m, nil
 }
@@ -144,7 +167,7 @@ func (m mergeModel) ViewContent() string {
 	var b strings.Builder
 
 	switch m.step {
-	case mergeStepConfirm:
+	case mergeStepConfirm, mergeStepMerging:
 		b.WriteString(m.styles.WizardTitle.Render("Merge Agent"))
 		b.WriteString("\n\n")
 
@@ -181,7 +204,11 @@ func (m mergeModel) ViewContent() string {
 		}
 
 		b.WriteString("\n")
-		b.WriteString(m.styles.Help.Render("  y/enter: merge | space: toggle | esc: cancel"))
+		if m.step == mergeStepMerging {
+			b.WriteString(m.styles.WizardActive.Render("  " + m.spinner.View() + " Merging..."))
+		} else {
+			b.WriteString(m.styles.Help.Render("  y/enter: merge | space: toggle | esc: cancel"))
+		}
 
 	case mergeStepConflicts:
 		b.WriteString(m.styles.WizardTitle.Render("Merge Agent — Conflicts"))

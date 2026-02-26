@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
@@ -19,6 +20,9 @@ type dismissModel struct {
 	agentName    string
 	branch       string
 	deleteBranch bool
+	dismissing   bool
+
+	spinner spinner.Model
 }
 
 type dismissDoneMsg struct{}
@@ -32,6 +36,8 @@ type startDismissMsg struct {
 }
 
 func newDismiss(s Styles, orch *orchestrator.Orchestrator, msg startDismissMsg) dismissModel {
+	sp := spinner.New()
+	sp.Spinner = spinner.MiniDot
 	return dismissModel{
 		orch:         orch,
 		agentID:      msg.agentID,
@@ -39,28 +45,45 @@ func newDismiss(s Styles, orch *orchestrator.Orchestrator, msg startDismissMsg) 
 		branch:       msg.branch,
 		deleteBranch: msg.deleteBranch,
 		styles:       s,
+		spinner:      sp,
 	}
 }
 
 func (m dismissModel) Update(msg tea.Msg) (dismissModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		if m.dismissing {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+
 	case tea.KeyMsg:
+		if m.dismissing {
+			return m, nil
+		}
+
 		m.err = ""
 
 		switch msg.String() {
 		case "esc", "n":
 			return m, func() tea.Msg { return dismissCancelMsg{} }
 		case "y", "enter":
+			m.dismissing = true
 			id := m.agentID
 			del := m.deleteBranch
-			return m, func() tea.Msg {
+			dismissCmd := func() tea.Msg {
 				if err := m.orch.DismissAgent(id, del); err != nil {
 					return dismissErrorMsg{err: err.Error()}
 				}
 				return dismissDoneMsg{}
 			}
+			return m, tea.Batch(m.spinner.Tick, dismissCmd)
 		}
+
 	case dismissErrorMsg:
+		m.dismissing = false
 		m.err = msg.err
 		return m, nil
 	}
@@ -104,7 +127,11 @@ func (m dismissModel) ViewContent() string {
 	b.WriteString("\n")
 
 	b.WriteString("\n")
-	b.WriteString(m.styles.Help.Render("  y/enter: confirm | esc/n: cancel"))
+	if m.dismissing {
+		b.WriteString(m.styles.WizardActive.Render("  " + m.spinner.View() + " Dismissing..."))
+	} else {
+		b.WriteString(m.styles.Help.Render("  y/enter: confirm | esc/n: cancel"))
+	}
 
 	if m.err != "" {
 		b.WriteString("\n\n")
