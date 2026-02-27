@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -18,6 +20,7 @@ const (
 	viewSpawn
 	viewMerge
 	viewDismiss
+	viewPrune
 )
 
 type AppModel struct {
@@ -34,6 +37,7 @@ type AppModel struct {
 	spawn     spawnModel
 	merge     mergeModel
 	dismiss   dismissModel
+	prune     pruneModel
 
 	width  int
 	height int
@@ -70,6 +74,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.merge.width = msg.Width
 		m.dismiss.width = msg.Width
+		m.prune.width = msg.Width
 		return m, nil
 
 	case tea.FocusMsg:
@@ -133,6 +138,30 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, dashCmd
 
+	case orchestrator.PruneResultMsg:
+		if msg.Success {
+			m.dashboard.addNotification(notification{
+				text:  fmt.Sprintf("Agent %s pruned (branch kept)", msg.AgentID),
+				time:  time.Now(),
+				style: m.styles.Reviewed,
+			})
+			agents := m.dashboard.sortedAgents()
+			if m.dashboard.cursor >= len(agents) && m.dashboard.cursor > 0 {
+				m.dashboard.cursor = len(agents) - 1
+			}
+		}
+		if m.activeView == viewPrune {
+			var cmd tea.Cmd
+			m.prune, cmd = m.prune.Update(msg)
+			return m, cmd
+		}
+		if m.activeView == viewMerge {
+			var cmd tea.Cmd
+			m.merge, cmd = m.merge.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+
 	case orchestrator.CleanupMsg:
 		var cmd tea.Cmd
 		m.dashboard, cmd = m.dashboard.Update(msg)
@@ -184,6 +213,23 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+
+	case startPruneMsg:
+		m.activeView = viewPrune
+		m.prune = newPrune(m.styles, m.orch, msg)
+		return m, nil
+
+	case pruneDoneMsg:
+		m.activeView = viewDashboard
+		agents := m.dashboard.sortedAgents()
+		if m.dashboard.cursor >= len(agents) && m.dashboard.cursor > 0 {
+			m.dashboard.cursor = len(agents) - 1
+		}
+		return m, nil
+
+	case pruneCancelMsg:
+		m.activeView = viewDashboard
+		return m, nil
 	}
 
 	switch m.activeView {
@@ -195,6 +241,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateMerge(msg)
 	case viewDismiss:
 		return m.updateDismiss(msg)
+	case viewPrune:
+		return m.updatePrune(msg)
 	}
 
 	return m, nil
@@ -235,6 +283,12 @@ func (m AppModel) updateDismiss(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m AppModel) updatePrune(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.prune, cmd = m.prune.Update(msg)
+	return m, cmd
+}
+
 func (m AppModel) View() string {
 	switch m.activeView {
 	case viewSpawn:
@@ -243,6 +297,8 @@ func (m AppModel) View() string {
 		return m.viewSideBySide(m.merge.ViewContent())
 	case viewDismiss:
 		return m.viewSideBySide(m.dismiss.ViewContent())
+	case viewPrune:
+		return m.viewSideBySide(m.prune.ViewContent())
 	default:
 		return m.dashboard.View()
 	}

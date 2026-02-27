@@ -74,6 +74,19 @@ func newMerge(s Styles, orch *orchestrator.Orchestrator, repoPath string, msg st
 
 func (m mergeModel) Update(msg tea.Msg) (mergeModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case orchestrator.PruneResultMsg:
+		if msg.AgentID != m.agentID {
+			return m, nil
+		}
+		if msg.Success {
+			return m, func() tea.Msg { return mergeDoneMsg{} }
+		}
+		m.step = mergeStepConfirm
+		if msg.Error != "" {
+			m.err = msg.Error
+		}
+		return m, nil
+
 	case orchestrator.MergeResultMsg:
 		if msg.AgentID != m.agentID {
 			return m, nil
@@ -122,7 +135,25 @@ func (m mergeModel) Update(msg tea.Msg) (mergeModel, tea.Cmd) {
 	return m, nil
 }
 
+func (m mergeModel) isExistingBranch() bool {
+	return m.baseBranch == ""
+}
+
 func (m mergeModel) updateConfirm(msg tea.KeyMsg) (mergeModel, tea.Cmd) {
+	if m.isExistingBranch() {
+		// Existing branch: no options to toggle, just confirm/cancel
+		switch msg.String() {
+		case "y", "enter":
+			m.step = mergeStepMerging
+			pruneID := m.agentID
+			pruneCmd := func() tea.Msg {
+				return m.orch.PruneAgent(pruneID)
+			}
+			return m, tea.Batch(m.spinner.Tick, pruneCmd)
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "j", "down":
 		if m.optionCursor < 1 {
@@ -168,46 +199,70 @@ func (m mergeModel) ViewContent() string {
 
 	switch m.step {
 	case mergeStepConfirm, mergeStepMerging:
-		b.WriteString(m.styles.WizardTitle.Render("Merge Agent"))
-		b.WriteString("\n\n")
+		if m.isExistingBranch() {
+			b.WriteString(m.styles.WizardTitle.Render("Detach Agent"))
+			b.WriteString("\n\n")
 
-		b.WriteString(fmt.Sprintf("  Agent:       %s\n", m.agentName))
-		b.WriteString(fmt.Sprintf("  Branch:      %s\n", m.branch))
-		b.WriteString(fmt.Sprintf("  Into:        %s\n", m.baseBranch))
-		b.WriteString("\n")
-		b.WriteString(m.styles.WizardActive.Render("  After merge:"))
-		b.WriteString("\n")
-
-		options := []struct {
-			label   string
-			checked bool
-		}{
-			{"Remove worktree", m.removeWorktree},
-			{"Delete branch", m.deleteBranch},
-		}
-		for i, opt := range options {
-			cursor := "  "
-			if i == m.optionCursor {
-				cursor = "> "
-			}
-			check := " "
-			if opt.checked {
-				check = "x"
-			}
-			line := fmt.Sprintf("  %s[%s] %s", cursor, check, opt.label)
-			if i == m.optionCursor {
-				b.WriteString(m.styles.WizardActive.Render(line))
-			} else {
-				b.WriteString(line)
-			}
+			b.WriteString(fmt.Sprintf("  Agent:       %s\n", m.agentName))
+			b.WriteString(fmt.Sprintf("  Branch:      %s\n", m.branch))
 			b.WriteString("\n")
-		}
+			b.WriteString(m.styles.Reviewed.Render("  Branch will be kept as-is"))
+			b.WriteString("\n\n")
 
-		b.WriteString("\n")
-		if m.step == mergeStepMerging {
-			b.WriteString(m.styles.WizardActive.Render("  " + m.spinner.View() + " Merging..."))
+			b.WriteString(m.styles.WizardActive.Render("  This will:"))
+			b.WriteString("\n")
+			b.WriteString("    - Stop the Claude process\n")
+			b.WriteString("    - Kill the tmux window\n")
+			b.WriteString("    - Remove the worktree\n")
+
+			b.WriteString("\n")
+			if m.step == mergeStepMerging {
+				b.WriteString(m.styles.WizardActive.Render("  " + m.spinner.View() + " Detaching..."))
+			} else {
+				b.WriteString(m.styles.Help.Render("  y/enter: detach | esc: cancel"))
+			}
 		} else {
-			b.WriteString(m.styles.Help.Render("  y/enter: merge | space: toggle | esc: cancel"))
+			b.WriteString(m.styles.WizardTitle.Render("Merge Agent"))
+			b.WriteString("\n\n")
+
+			b.WriteString(fmt.Sprintf("  Agent:       %s\n", m.agentName))
+			b.WriteString(fmt.Sprintf("  Branch:      %s\n", m.branch))
+			b.WriteString(fmt.Sprintf("  Into:        %s\n", m.baseBranch))
+			b.WriteString("\n")
+			b.WriteString(m.styles.WizardActive.Render("  After merge:"))
+			b.WriteString("\n")
+
+			options := []struct {
+				label   string
+				checked bool
+			}{
+				{"Remove worktree", m.removeWorktree},
+				{"Delete branch", m.deleteBranch},
+			}
+			for i, opt := range options {
+				cursor := "  "
+				if i == m.optionCursor {
+					cursor = "> "
+				}
+				check := " "
+				if opt.checked {
+					check = "x"
+				}
+				line := fmt.Sprintf("  %s[%s] %s", cursor, check, opt.label)
+				if i == m.optionCursor {
+					b.WriteString(m.styles.WizardActive.Render(line))
+				} else {
+					b.WriteString(line)
+				}
+				b.WriteString("\n")
+			}
+
+			b.WriteString("\n")
+			if m.step == mergeStepMerging {
+				b.WriteString(m.styles.WizardActive.Render("  " + m.spinner.View() + " Merging..."))
+			} else {
+				b.WriteString(m.styles.Help.Render("  y/enter: merge | space: toggle | esc: cancel"))
+			}
 		}
 
 	case mergeStepConflicts:

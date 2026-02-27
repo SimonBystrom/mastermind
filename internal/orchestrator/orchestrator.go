@@ -58,6 +58,13 @@ type CleanupMsg struct {
 	Results []CleanupResult
 }
 
+type PruneResultMsg struct {
+	AgentID        string
+	Success        bool
+	Error          string
+	HasUncommitted bool
+}
+
 type PreviewStartedMsg struct{ AgentID string }
 type PreviewStoppedMsg  struct{ AgentID string }
 type PreviewErrorMsg    struct{ AgentID string; Error string }
@@ -273,6 +280,57 @@ func (o *Orchestrator) DismissAgent(id string, deleteBranch bool) error {
 	o.saveState()
 
 	return nil
+}
+
+func (o *Orchestrator) PruneAgent(id string) PruneResultMsg {
+	a, ok := o.store.Get(id)
+	if !ok {
+		return PruneResultMsg{AgentID: id, Error: "agent not found"}
+	}
+
+	if o.git.HasChanges(a.WorktreePath) {
+		return PruneResultMsg{AgentID: id, Error: "uncommitted changes in worktree", HasUncommitted: true}
+	}
+
+	if a.TmuxPaneID != "" {
+		o.monitor.Remove(a.TmuxPaneID)
+	}
+
+	// Gracefully stop Claude if the pane is still alive
+	if a.TmuxPaneID != "" && o.tmux.PaneExistsInWindow(a.TmuxPaneID, a.TmuxWindow) {
+		status := a.GetStatus()
+		if status == agent.StatusRunning || status == agent.StatusWaiting {
+			o.tmux.SendKeys(a.TmuxPaneID, "C-c")
+			o.tmux.SendKeys(a.TmuxPaneID, "/exit", "Enter")
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	// Kill lazygit pane if open
+	if lgPane := a.GetLazygitPaneID(); lgPane != "" {
+		if err := o.tmux.KillPane(lgPane); err != nil {
+			slog.Warn("failed to kill lazygit pane", "id", id, "pane", lgPane, "error", err)
+		}
+	}
+
+	if a.TmuxWindow != "" {
+		if err := o.tmux.KillWindow(a.TmuxWindow); err != nil {
+			slog.Warn("failed to kill tmux window", "id", id, "window", a.TmuxWindow, "error", err)
+		}
+	}
+
+	if a.WorktreePath != "" {
+		if err := o.git.RemoveWorktree(o.repoPath, a.WorktreePath); err != nil {
+			slog.Warn("failed to remove worktree", "id", id, "path", a.WorktreePath, "error", err)
+		}
+	}
+
+	o.store.Remove(id)
+
+	slog.Info("agent pruned (branch kept)", "id", id, "branch", a.Branch)
+	o.saveState()
+
+	return PruneResultMsg{AgentID: id, Success: true}
 }
 
 func (o *Orchestrator) FocusAgent(id string) error {

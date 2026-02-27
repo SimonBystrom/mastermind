@@ -43,6 +43,7 @@ type dashboardKeyMap struct {
 	Focus      key.Binding
 	Preview    key.Binding
 	Merge      key.Binding
+	Prune      key.Binding
 	Dismiss    key.Binding
 	DismissDel key.Binding
 	Sort       key.Binding
@@ -55,6 +56,7 @@ func newDashboardKeyMap() dashboardKeyMap {
 		Focus:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter:", "focus")),
 		Preview:    key.NewBinding(key.WithKeys("p"), key.WithHelp("p:", "preview")),
 		Merge:      key.NewBinding(key.WithKeys("m"), key.WithHelp("m:", "merge")),
+		Prune:      key.NewBinding(key.WithKeys("w"), key.WithHelp("w:", "prune wt")),
 		Dismiss:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d:", "dismiss")),
 		DismissDel: key.NewBinding(key.WithKeys("D"), key.WithHelp("D:", "dismiss+del")),
 		Sort:       key.NewBinding(key.WithKeys("s"), key.WithHelp("s:", "sort (id)")),
@@ -63,12 +65,12 @@ func newDashboardKeyMap() dashboardKeyMap {
 }
 
 func (k dashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.New, k.Focus, k.Preview, k.Merge, k.Dismiss, k.DismissDel, k.Sort, k.Quit}
+	return []key.Binding{k.New, k.Focus, k.Preview, k.Merge, k.Prune, k.Dismiss, k.DismissDel, k.Sort, k.Quit}
 }
 
 func (k dashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.New, k.Focus, k.Preview, k.Merge},
+		{k.New, k.Focus, k.Preview, k.Merge, k.Prune},
 		{k.Dismiss, k.DismissDel, k.Sort, k.Quit},
 	}
 }
@@ -382,6 +384,18 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 							return orchestrator.PreviewErrorMsg{AgentID: a.ID, Error: err.Error()}
 						}
 						return nil
+					}
+				}
+			}
+		case "w":
+			if len(agents) > 0 && m.cursor < len(agents) {
+				a := agents[m.cursor]
+				name := a.ID
+				return m, func() tea.Msg {
+					return startPruneMsg{
+						agentID:   a.ID,
+						agentName: name,
+						branch:    a.Branch,
 					}
 				}
 			}
@@ -725,6 +739,7 @@ func (m dashboardModel) ViewContent() string {
 	m.keys.Focus.SetEnabled(hasSelection)
 	m.keys.Preview.SetEnabled(canPreview)
 	m.keys.Merge.SetEnabled(canMerge)
+	m.keys.Prune.SetEnabled(hasSelection)
 	m.keys.Dismiss.SetEnabled(hasSelection)
 	m.keys.DismissDel.SetEnabled(hasSelection)
 	m.keys.Sort.SetHelp("s:", fmt.Sprintf("sort (%s)", m.sortLabel()))
@@ -734,7 +749,7 @@ func (m dashboardModel) ViewContent() string {
 	var helpLine string
 	if cw < 80 {
 		m.keys.DismissDel.SetHelp("D:", "del")
-		line1 := m.help.ShortHelpView([]key.Binding{m.keys.New, m.keys.Focus, m.keys.Preview, m.keys.Merge})
+		line1 := m.help.ShortHelpView([]key.Binding{m.keys.New, m.keys.Focus, m.keys.Preview, m.keys.Merge, m.keys.Prune})
 		line2 := m.help.ShortHelpView([]key.Binding{m.keys.Dismiss, m.keys.DismissDel, m.keys.Sort, m.keys.Quit})
 		helpLine = "  " + line1 + "\n  " + line2
 	} else {
