@@ -1206,6 +1206,11 @@ func (o *Orchestrator) RecoverAgents() {
 		}
 		a.SetDurationState(pa.AccumulatedDuration, pa.RunningStartedAt)
 
+		// Read sidecar files immediately so recovered agents have
+		// statusline data and todos available before the first monitor tick.
+		o.readStatuslineCached(a)
+		o.readTodosCached(a)
+
 		o.store.Add(a)
 		recovered++
 		slog.Info("recovered agent", "id", a.ID, "branch", a.Branch, "status", pa.Status)
