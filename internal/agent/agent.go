@@ -3,6 +3,8 @@ package agent
 import (
 	"sync"
 	"time"
+
+	"github.com/simonbystrom/mastermind/internal/hook"
 )
 
 type Status string
@@ -49,6 +51,9 @@ type Agent struct {
 
 	// Claude Code statusline data (read from sidecar file)
 	statuslineData *StatuslineData
+
+	// Claude Code todo/phase data (read from sidecar file)
+	todos []hook.TodoItem
 }
 
 func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
@@ -197,6 +202,18 @@ func (a *Agent) SetStatuslineData(sd *StatuslineData) {
 	a.statuslineData = sd
 }
 
+func (a *Agent) GetTodos() []hook.TodoItem {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.todos
+}
+
+func (a *Agent) SetTodos(todos []hook.TodoItem) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.todos = todos
+}
+
 func (a *Agent) Duration() time.Duration {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -233,6 +250,7 @@ type AgentSnapshot struct {
 	StatuslineData      *StatuslineData
 	MergeDeleteBranch   bool
 	MergeRemoveWorktree bool
+	Todos               []hook.TodoItem
 }
 
 // Snapshot reads all mutable fields under a single lock acquisition.
@@ -252,6 +270,7 @@ func (a *Agent) Snapshot() AgentSnapshot {
 		StatuslineData:      a.statuslineData,
 		MergeDeleteBranch:   a.mergeDeleteBranch,
 		MergeRemoveWorktree: a.mergeRemoveWorktree,
+		Todos:               a.todos,
 	}
 }
 

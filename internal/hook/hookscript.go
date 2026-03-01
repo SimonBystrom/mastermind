@@ -64,6 +64,27 @@ printf '{"status":"%s","ts":%s}\n' "$STATUS" "$TS" > "$TMP_FILE"
 mv "$TMP_FILE" "$STATUS_FILE"
 `
 
+// todosHookScript captures TodoWrite tool output and writes it to a sidecar file.
+const todosHookScript = `#!/bin/sh
+set -e
+
+# Read hook event JSON from stdin
+INPUT=$(cat)
+
+# Extract the todos array from tool_input using jq
+TODOS=$(echo "$INPUT" | jq -c '.tool_input.todos // empty' 2>/dev/null)
+
+if [ -z "$TODOS" ]; then
+  exit 0
+fi
+
+# Write todos file atomically to the working directory
+TODOS_FILE="${CLAUDE_WORKING_DIRECTORY:-.}/.mastermind-todos"
+TMP_FILE=$(mktemp "${TODOS_FILE}.XXXXXX")
+echo "$TODOS" > "$TMP_FILE"
+mv "$TMP_FILE" "$TODOS_FILE"
+`
+
 // settingsJSONMap is the .claude/settings.local.json content that registers hooks.
 var settingsJSONMap = map[string]interface{}{
 	"hooks": map[string]interface{}{
@@ -75,6 +96,9 @@ var settingsJSONMap = map[string]interface{}{
 		"PostToolUse": []map[string]interface{}{
 			{"hooks": []map[string]interface{}{
 				{"type": "command", "command": `"$CLAUDE_PROJECT_DIR"/.claude/hooks/mastermind-status.sh`},
+			}},
+			{"matcher": "TodoWrite", "hooks": []map[string]interface{}{
+				{"type": "command", "command": `"$CLAUDE_PROJECT_DIR"/.claude/hooks/mastermind-todos.sh`},
 			}},
 		},
 		"Notification": []map[string]interface{}{
@@ -126,6 +150,11 @@ func WriteHookFiles(worktreePath string) error {
 	scriptPath := filepath.Join(hooksDir, "mastermind-status.sh")
 	if err := os.WriteFile(scriptPath, []byte(hookScript), 0o755); err != nil {
 		return fmt.Errorf("write hook script: %w", err)
+	}
+
+	todosScriptPath := filepath.Join(hooksDir, "mastermind-todos.sh")
+	if err := os.WriteFile(todosScriptPath, []byte(todosHookScript), 0o755); err != nil {
+		return fmt.Errorf("write todos hook script: %w", err)
 	}
 
 	// Write settings.local.json (uses pre-computed bytes)

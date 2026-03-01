@@ -14,6 +14,7 @@ import (
 
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/config"
+	"github.com/simonbystrom/mastermind/internal/hook"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
@@ -695,6 +696,14 @@ func (m dashboardModel) ViewContent() string {
 
 			b.WriteString(row)
 			b.WriteString("\n")
+
+			// Render todos below the agent row
+			if todos := a.GetTodos(); len(todos) > 0 {
+				for _, todo := range todos {
+					b.WriteString(renderTodoLine(m.styles, todo, cw))
+					b.WriteString("\n")
+				}
+			}
 		}
 	}
 
@@ -781,6 +790,40 @@ func formatDuration(d time.Duration) string {
 		sec = "0" + sec
 	}
 	return strconv.Itoa(m) + "m " + sec + "s"
+}
+
+func renderTodoLine(styles Styles, todo hook.TodoItem, cw int) string {
+	var icon, text string
+	switch todo.Status {
+	case "completed":
+		icon = styles.Done.Render("\u2713") // ✓
+		text = styles.Done.Render(todo.Content)
+	case "in_progress":
+		icon = styles.Running.Render("\u25a0") // ■
+		text = styles.Running.Render(todo.Content)
+	default:
+		icon = styles.WizardDim.Render("\u25a1") // □
+		text = styles.WizardDim.Render(todo.Content)
+	}
+	line := fmt.Sprintf("      %s %s", icon, text)
+	maxW := cw - 6 // indent
+	if lipgloss.Width(line) > cw {
+		// Truncate content to fit
+		plain := fmt.Sprintf("      %s ", icon)
+		remaining := maxW - lipgloss.Width(plain)
+		if remaining > 3 {
+			switch todo.Status {
+			case "completed":
+				text = styles.Done.Render(truncate(todo.Content, remaining))
+			case "in_progress":
+				text = styles.Running.Render(truncate(todo.Content, remaining))
+			default:
+				text = styles.WizardDim.Render(truncate(todo.Content, remaining))
+			}
+			line = fmt.Sprintf("      %s %s", icon, text)
+		}
+	}
+	return line
 }
 
 func truncate(s string, max int) string {

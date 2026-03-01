@@ -92,10 +92,11 @@ type Orchestrator struct {
 	skipPermissions bool
 
 	// Performance caches (monitor loop only, no mutex needed)
-	idleHasChanges     map[string]*bool       // agentID → cached HasChanges result for idle agents
-	hookMtimeCache     map[string]mtimeEntry   // worktreePath → cached hook status
-	statuslineMtimeCache map[string]mtimeEntry // worktreePath → cached statusline data
-	lastSaveTime       time.Time               // debounce state persistence
+	idleHasChanges       map[string]*bool       // agentID → cached HasChanges result for idle agents
+	hookMtimeCache       map[string]mtimeEntry  // worktreePath → cached hook status
+	statuslineMtimeCache map[string]mtimeEntry  // worktreePath → cached statusline data
+	todosMtimeCache      map[string]mtimeEntry  // worktreePath → cached todos data
+	lastSaveTime         time.Time              // debounce state persistence
 
 	previewMu         sync.RWMutex
 	previewAgentID    string // ID of agent being previewed (empty = no preview)
@@ -160,6 +161,7 @@ func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir
 		idleHasChanges:       make(map[string]*bool),
 		hookMtimeCache:       make(map[string]mtimeEntry),
 		statuslineMtimeCache: make(map[string]mtimeEntry),
+		todosMtimeCache:      make(map[string]mtimeEntry),
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -489,6 +491,7 @@ func (o *Orchestrator) StartMonitor() {
 			// Try hook-based status detection first (skip tmux capture if fresh)
 			if o.handleHookStatus(a, snap.Status) {
 				o.readStatuslineCached(a)
+				o.readTodosCached(a)
 				continue
 			}
 
@@ -535,6 +538,7 @@ func (o *Orchestrator) StartMonitor() {
 			}
 
 			o.readStatuslineCached(a)
+			o.readTodosCached(a)
 		}
 
 		if o.store.IsDirty() {
@@ -647,6 +651,29 @@ func (o *Orchestrator) readStatuslineCached(a *agent.Agent) {
 	a.SetStatuslineData(sd)
 	o.store.MarkDirty()
 	o.statuslineMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: sd}
+}
+
+// readTodosCached reads the todos sidecar file, using mtime to skip re-reads.
+func (o *Orchestrator) readTodosCached(a *agent.Agent) {
+	path := filepath.Join(a.WorktreePath, ".mastermind-todos")
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	mtime := info.ModTime()
+	if cached, ok := o.todosMtimeCache[a.WorktreePath]; ok && cached.mtime.Equal(mtime) {
+		if todos, ok := cached.result.([]hook.TodoItem); ok && todos != nil {
+			a.SetTodos(todos)
+		}
+		return
+	}
+	todos, err := hook.ReadTodos(a.WorktreePath)
+	if err != nil {
+		o.todosMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: ([]hook.TodoItem)(nil)}
+		return
+	}
+	a.SetTodos(todos)
+	o.todosMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: todos}
 }
 
 func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
