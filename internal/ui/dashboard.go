@@ -793,35 +793,31 @@ func formatDuration(d time.Duration) string {
 }
 
 func renderTodoLine(styles Styles, todo hook.TodoItem, cw int) string {
-	var icon, text string
+	var iconChar string
+	var style lipgloss.Style
 	switch todo.Status {
-	case "completed":
-		icon = styles.Done.Render("\u2713") // ✓
-		text = styles.Done.Render(todo.Content)
-	case "in_progress":
-		icon = styles.Running.Render("\u25a0") // ■
-		text = styles.Running.Render(todo.Content)
+	case hook.TodoCompleted:
+		iconChar = "\u2713" // ✓
+		style = styles.Done
+	case hook.TodoInProgress:
+		iconChar = "\u25a0" // ■
+		style = styles.Running
 	default:
-		icon = styles.WizardDim.Render("\u25a1") // □
-		text = styles.WizardDim.Render(todo.Content)
+		iconChar = "\u25a1" // □
+		style = styles.WizardDim
 	}
-	line := fmt.Sprintf("      %s %s", icon, text)
-	maxW := cw - 6 // indent
+
+	icon := style.Render(iconChar)
+	content := todo.Content
+	line := fmt.Sprintf("      %s %s", icon, style.Render(content))
+
 	if lipgloss.Width(line) > cw {
-		// Truncate content to fit
 		plain := fmt.Sprintf("      %s ", icon)
-		remaining := maxW - lipgloss.Width(plain)
+		remaining := cw - 6 - lipgloss.Width(plain)
 		if remaining > 3 {
-			switch todo.Status {
-			case "completed":
-				text = styles.Done.Render(truncate(todo.Content, remaining))
-			case "in_progress":
-				text = styles.Running.Render(truncate(todo.Content, remaining))
-			default:
-				text = styles.WizardDim.Render(truncate(todo.Content, remaining))
-			}
-			line = fmt.Sprintf("      %s %s", icon, text)
+			content = truncate(content, remaining)
 		}
+		line = fmt.Sprintf("      %s %s", icon, style.Render(content))
 	}
 	return line
 }

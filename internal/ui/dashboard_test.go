@@ -7,9 +7,11 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/config"
+	"github.com/simonbystrom/mastermind/internal/hook"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
@@ -205,6 +207,53 @@ func TestDashboard_SortCycle(t *testing.T) {
 	if d.sortBy != sortByID {
 		t.Errorf("sort after s = %d, want sortByID (wrap around)", d.sortBy)
 	}
+}
+
+func TestRenderTodoLine(t *testing.T) {
+	styles := NewStyles(config.Default().Colors)
+
+	t.Run("completed todo", func(t *testing.T) {
+		todo := hook.TodoItem{ID: "1", Content: "Write tests", Status: hook.TodoCompleted}
+		line := renderTodoLine(styles, todo, 80)
+		if !strings.Contains(line, "Write tests") {
+			t.Errorf("expected content in line, got %q", line)
+		}
+		if !strings.Contains(line, "\u2713") {
+			t.Error("expected checkmark icon for completed todo")
+		}
+	})
+
+	t.Run("in_progress todo", func(t *testing.T) {
+		todo := hook.TodoItem{ID: "2", Content: "Fix bug", Status: hook.TodoInProgress}
+		line := renderTodoLine(styles, todo, 80)
+		if !strings.Contains(line, "Fix bug") {
+			t.Errorf("expected content in line, got %q", line)
+		}
+		if !strings.Contains(line, "\u25a0") {
+			t.Error("expected filled square icon for in_progress todo")
+		}
+	})
+
+	t.Run("pending todo", func(t *testing.T) {
+		todo := hook.TodoItem{ID: "3", Content: "Refactor", Status: hook.TodoPending}
+		line := renderTodoLine(styles, todo, 80)
+		if !strings.Contains(line, "Refactor") {
+			t.Errorf("expected content in line, got %q", line)
+		}
+		if !strings.Contains(line, "\u25a1") {
+			t.Error("expected empty square icon for pending todo")
+		}
+	})
+
+	t.Run("truncation", func(t *testing.T) {
+		longContent := strings.Repeat("x", 200)
+		todo := hook.TodoItem{ID: "4", Content: longContent, Status: hook.TodoPending}
+		line := renderTodoLine(styles, todo, 40)
+		// The rendered line should not exceed cw in visual width
+		if lipgloss.Width(line) > 40 {
+			t.Errorf("line visual width %d exceeds cw 40", lipgloss.Width(line))
+		}
+	})
 }
 
 func TestDashboard_Notifications(t *testing.T) {

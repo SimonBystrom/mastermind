@@ -4,6 +4,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/simonbystrom/mastermind/internal/hook"
 )
 
 func TestNewAgent(t *testing.T) {
@@ -196,6 +198,10 @@ func TestAgent_Snapshot(t *testing.T) {
 	a.SetFinished(1, time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
 	a.SetLazygitPaneID("%5")
 	a.SetPreReviewCommit("abc123")
+	a.SetTodos([]hook.TodoItem{
+		{ID: "t1", Content: "Write tests", Status: "pending"},
+		{ID: "t2", Content: "Fix bug", Status: "completed"},
+	})
 
 	snap := a.Snapshot()
 
@@ -219,6 +225,12 @@ func TestAgent_Snapshot(t *testing.T) {
 	}
 	if snap.PreReviewCommit != "abc123" {
 		t.Errorf("Snapshot().PreReviewCommit = %q, want %q", snap.PreReviewCommit, "abc123")
+	}
+	if len(snap.Todos) != 2 {
+		t.Fatalf("Snapshot().Todos length = %d, want 2", len(snap.Todos))
+	}
+	if snap.Todos[0].ID != "t1" || snap.Todos[0].Content != "Write tests" {
+		t.Errorf("Snapshot().Todos[0] = %+v, unexpected", snap.Todos[0])
 	}
 }
 

@@ -7,7 +7,13 @@ import (
 	"path/filepath"
 )
 
-const todosFileName = ".mastermind-todos"
+const (
+	todosFileName = ".mastermind-todos"
+
+	TodoPending    = "pending"
+	TodoInProgress = "in_progress"
+	TodoCompleted  = "completed"
+)
 
 // TodoItem represents a single todo entry from Claude Code's TodoWrite tool.
 type TodoItem struct {
