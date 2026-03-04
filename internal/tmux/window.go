@@ -154,6 +154,26 @@ func ListPanesInWindow(windowID string) ([]string, error) {
 	return panes, nil
 }
 
+// ListWindows returns a map of window name → WindowInfo for all windows in the session.
+func ListWindows(session string) (map[string]WindowInfo, error) {
+	out, err := exec.Command("tmux", "list-windows", "-t", session, "-F", "#{window_id}|#{window_name}|#{pane_id}").Output()
+	if err != nil {
+		return nil, fmt.Errorf("list-windows: %w", err)
+	}
+	result := make(map[string]WindowInfo)
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		result[parts[1]] = WindowInfo{ID: parts[0], PaneID: parts[2]}
+	}
+	return result, nil
+}
+
 // WindowIDForPane returns the window ID that contains the given pane.
 func WindowIDForPane(paneID string) (string, error) {
 	out, err := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{window_id}").Output()

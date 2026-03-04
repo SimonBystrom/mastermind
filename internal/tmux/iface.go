@@ -7,6 +7,12 @@ type PaneInfo struct {
 	ExitCode int
 }
 
+// WindowInfo holds metadata about a tmux window returned by ListWindows.
+type WindowInfo struct {
+	ID     string
+	PaneID string
+}
+
 // TmuxOps abstracts tmux window/pane operations for testing.
 type TmuxOps interface {
 	NewWindow(session, name, dir string, command []string) (string, error)
@@ -20,6 +26,7 @@ type TmuxOps interface {
 	WindowIDForPane(paneID string) (string, error)
 	ListAllPanes(session string) (map[string]PaneInfo, error)
 	ListPanesInWindow(windowID string) ([]string, error)
+	ListWindows(session string) (map[string]WindowInfo, error)
 }
 
 // PaneStatusChecker abstracts pane monitoring for testing.
@@ -73,4 +80,8 @@ func (RealTmux) ListAllPanes(session string) (map[string]PaneInfo, error) {
 
 func (RealTmux) ListPanesInWindow(windowID string) ([]string, error) {
 	return ListPanesInWindow(windowID)
+}
+
+func (RealTmux) ListWindows(session string) (map[string]WindowInfo, error) {
+	return ListWindows(session)
 }

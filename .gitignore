@@ -4,5 +4,6 @@
 .claude/hooks/
 .mastermind-status
 .mastermind-todos
+.mastermind-agent.json
 mastermind
 lore/

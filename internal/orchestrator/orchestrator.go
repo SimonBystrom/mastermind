@@ -223,6 +223,12 @@ func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) 
 	a := agent.NewAgent(branch, baseBranch, wtPath, windowID, paneID)
 	o.store.Add(a)
 
+	// Write agent metadata so orphaned worktrees can be rediscovered
+	writeAgentMetadata(wtPath, baseBranch)
+	if err := appendGitExclude(wtPath, agentMetadataFile, ""); err != nil {
+		slog.Warn("failed to exclude agent metadata from git", "path", wtPath, "error", err)
+	}
+
 	slog.Info("agent spawned", "id", a.ID, "branch", branch)
 	o.saveState()
 
@@ -1163,10 +1169,6 @@ func (o *Orchestrator) RecoverAgents() {
 	persisted, err := agent.LoadState(o.statePath)
 	if err != nil {
 		slog.Error("failed to load persisted state", "error", err)
-		return
-	}
-	if persisted == nil {
-		return
 	}
 
 	recovered := 0
@@ -1220,6 +1222,12 @@ func (o *Orchestrator) RecoverAgents() {
 		slog.Info("agent recovery complete", "recovered", recovered, "total", len(persisted))
 	}
 
+	// Discover orphaned worktrees that have tmux windows but aren't in state
+	if discovered := o.discoverOrphanedAgents(); discovered > 0 {
+		slog.Info("orphan discovery complete", "discovered", discovered)
+		o.saveState()
+	}
+
 	// Recover preview state
 	if ps := o.loadPreviewState(); ps != nil && ps.AgentID != "" {
 		o.previewMu.Lock()
@@ -1229,6 +1237,135 @@ func (o *Orchestrator) RecoverAgents() {
 		o.previewMu.Unlock()
 		slog.Info("recovered preview state", "agent", ps.AgentID, "prevBranch", ps.PrevBranch)
 	}
+}
+
+// agentMetadata is written to each worktree so orphaned agents can be rediscovered.
+type agentMetadata struct {
+	BaseBranch string `json:"base_branch"`
+}
+
+const agentMetadataFile = ".mastermind-agent.json"
+
+func writeAgentMetadata(wtPath, baseBranch string) {
+	data, err := json.Marshal(agentMetadata{BaseBranch: baseBranch})
+	if err != nil {
+		slog.Warn("failed to marshal agent metadata", "error", err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, agentMetadataFile), data, 0o644); err != nil {
+		slog.Warn("failed to write agent metadata", "path", wtPath, "error", err)
+	}
+}
+
+func readAgentMetadata(wtPath string) *agentMetadata {
+	data, err := os.ReadFile(filepath.Join(wtPath, agentMetadataFile))
+	if err != nil {
+		return nil
+	}
+	var m agentMetadata
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil
+	}
+	return &m
+}
+
+// discoverOrphanedAgents scans for worktrees that have a matching tmux window
+// but are not tracked in the store. It creates Agent entries for them.
+func (o *Orchestrator) discoverOrphanedAgents() int {
+	// Build set of branches already tracked
+	tracked := make(map[string]bool)
+	for _, a := range o.store.All() {
+		tracked[a.Branch] = true
+	}
+
+	// Get all tmux windows in this session
+	windows, err := o.tmux.ListWindows(o.session)
+	if err != nil {
+		slog.Debug("ListWindows failed, skipping orphan discovery", "error", err)
+		return 0
+	}
+
+	// Scan worktree directory for subdirectories
+	entries, err := os.ReadDir(o.worktreeDir)
+	if err != nil {
+		slog.Debug("failed to read worktree dir", "error", err)
+		return 0
+	}
+
+	discovered := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		branch := entry.Name()
+		if tracked[branch] {
+			continue
+		}
+
+		// Check if a tmux window with this branch name exists
+		winInfo, ok := windows[branch]
+		if !ok {
+			continue
+		}
+
+		wtPath := filepath.Join(o.worktreeDir, branch)
+
+		// Read metadata for base branch
+		meta := readAgentMetadata(wtPath)
+		baseBranch := ""
+		if meta != nil {
+			baseBranch = meta.BaseBranch
+		}
+
+		// Determine initial status
+		status := agent.StatusRunning
+		paneID := winInfo.PaneID
+
+		// Check if pane is dead
+		allPanes, paneErr := o.tmux.ListAllPanes(o.session)
+		if paneErr == nil {
+			if info, ok := allPanes[paneID]; ok && info.Dead {
+				if o.git.HasChanges(wtPath) {
+					status = agent.StatusReviewReady
+				} else {
+					status = agent.StatusDone
+				}
+			}
+		}
+
+		// If still running, check hook status
+		if status == agent.StatusRunning {
+			if sf, err := hook.ReadStatus(wtPath); err == nil && sf != nil && !sf.IsStale() {
+				switch sf.Status {
+				case hook.StatusIdle, hook.StatusStopped, hook.StatusWaitingInput:
+					if o.git.HasChanges(wtPath) {
+						status = agent.StatusReviewReady
+					} else {
+						status = agent.StatusDone
+					}
+				case hook.StatusWaitingPermission:
+					status = agent.StatusWaiting
+				}
+			}
+		}
+
+		a := agent.NewAgent(branch, baseBranch, wtPath, winInfo.ID, paneID)
+		a.SetStatus(status)
+		if status == agent.StatusWaiting {
+			a.SetWaitingFor("permission")
+		}
+		a.SetEverActive(true)
+
+		// Read sidecar files
+		o.readStatuslineCached(a)
+		o.readTodosCached(a)
+
+		o.store.Add(a)
+		discovered++
+		slog.Info("discovered orphaned agent", "id", a.ID, "branch", branch, "status", status)
+	}
+
+	return discovered
 }
 
 func (o *Orchestrator) saveState() {
@@ -1295,10 +1432,11 @@ func (o *Orchestrator) writeClaudeProjectSettings(wtPath string) error {
 }
 
 // appendGitExclude adds a pattern to .git/info/exclude for the given worktree
-// if it's not already present.
+// if it's not already present. Uses --git-common-dir so excludes work in
+// worktrees (worktree-specific git dirs don't support info/exclude).
 func appendGitExclude(wtPath, pattern, _ string) error {
-	// For worktrees, the git dir is found via `git rev-parse --git-dir`
-	out, err := exec.Command("git", "-C", wtPath, "rev-parse", "--git-dir").Output()
+	// Use --git-common-dir which resolves to the main .git dir for worktrees
+	out, err := exec.Command("git", "-C", wtPath, "rev-parse", "--git-common-dir").Output()
 	if err != nil {
 		return err
 	}

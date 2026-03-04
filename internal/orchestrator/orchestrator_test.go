@@ -2,7 +2,10 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -182,6 +185,8 @@ type mockTmux struct {
 	paneExistsResult   bool
 	windowIDForPane    string
 	listPanesResult    []string
+	listWindowsResult  map[string]tmux.WindowInfo
+	listAllPanesResult map[string]tmux.PaneInfo
 }
 
 func (m *mockTmux) record(call string) {
@@ -262,12 +267,23 @@ func (m *mockTmux) WindowIDForPane(paneID string) (string, error) {
 
 func (m *mockTmux) ListAllPanes(session string) (map[string]tmux.PaneInfo, error) {
 	m.record("ListAllPanes:" + session)
+	if m.listAllPanesResult != nil {
+		return m.listAllPanesResult, nil
+	}
 	return nil, fmt.Errorf("not available in mock")
 }
 
 func (m *mockTmux) ListPanesInWindow(windowID string) ([]string, error) {
 	m.record("ListPanesInWindow:" + windowID)
 	return m.listPanesResult, nil
+}
+
+func (m *mockTmux) ListWindows(session string) (map[string]tmux.WindowInfo, error) {
+	m.record("ListWindows:" + session)
+	if m.listWindowsResult != nil {
+		return m.listWindowsResult, nil
+	}
+	return map[string]tmux.WindowInfo{}, nil
 }
 
 type mockMonitor struct {
@@ -656,5 +672,170 @@ func TestRecoverAgents(t *testing.T) {
 	agents := o.store.All()
 	if len(agents) != 1 {
 		t.Fatalf("expected 1 recovered agent, got %d", len(agents))
+	}
+}
+
+func TestDiscoverOrphanedAgents(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{
+		paneExistsResult: true,
+		listWindowsResult: map[string]tmux.WindowInfo{
+			"orphan-branch": {ID: "@5", PaneID: "%10"},
+		},
+		listAllPanesResult: map[string]tmux.PaneInfo{
+			"%10": {WindowID: "@5", Dead: false},
+		},
+	}
+	mm := &mockMonitor{}
+
+	dir := t.TempDir()
+	store := agent.NewStore()
+	o := New(
+		context.Background(),
+		store,
+		"/repo",
+		"test-session",
+		dir,
+		WithGit(mg),
+		WithTmux(mt),
+		WithMonitor(mm),
+	)
+
+	// Create a worktree directory with metadata
+	wtDir := filepath.Join(dir, "orphan-branch")
+	if err := os.MkdirAll(wtDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	meta := agentMetadata{BaseBranch: "main"}
+	data, _ := json.Marshal(meta)
+	if err := os.WriteFile(filepath.Join(wtDir, agentMetadataFile), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No persisted state — RecoverAgents should discover the orphan
+	o.RecoverAgents()
+
+	agents := o.store.All()
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 discovered agent, got %d", len(agents))
+	}
+	a := agents[0]
+	if a.Branch != "orphan-branch" {
+		t.Errorf("branch = %q, want %q", a.Branch, "orphan-branch")
+	}
+	if a.BaseBranch != "main" {
+		t.Errorf("base branch = %q, want %q", a.BaseBranch, "main")
+	}
+	if a.TmuxWindow != "@5" {
+		t.Errorf("tmux window = %q, want %q", a.TmuxWindow, "@5")
+	}
+	if a.TmuxPaneID != "%10" {
+		t.Errorf("tmux pane = %q, want %q", a.TmuxPaneID, "%10")
+	}
+	// Has changes + pane alive → should be running (hook file absent, so stays running)
+	if a.GetStatus() != agent.StatusRunning {
+		t.Errorf("status = %q, want %q", a.GetStatus(), agent.StatusRunning)
+	}
+}
+
+func TestDiscoverOrphanedAgents_DeadPane(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{
+		paneExistsResult: true,
+		listWindowsResult: map[string]tmux.WindowInfo{
+			"dead-agent": {ID: "@6", PaneID: "%11"},
+		},
+		listAllPanesResult: map[string]tmux.PaneInfo{
+			"%11": {WindowID: "@6", Dead: true, ExitCode: 0},
+		},
+	}
+	mm := &mockMonitor{}
+
+	dir := t.TempDir()
+	store := agent.NewStore()
+	o := New(
+		context.Background(),
+		store,
+		"/repo",
+		"test-session",
+		dir,
+		WithGit(mg),
+		WithTmux(mt),
+		WithMonitor(mm),
+	)
+
+	wtDir := filepath.Join(dir, "dead-agent")
+	if err := os.MkdirAll(wtDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	o.RecoverAgents()
+
+	agents := o.store.All()
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 discovered agent, got %d", len(agents))
+	}
+	// Dead pane + has changes → review_ready
+	if agents[0].GetStatus() != agent.StatusReviewReady {
+		t.Errorf("status = %q, want %q", agents[0].GetStatus(), agent.StatusReviewReady)
+	}
+}
+
+func TestDiscoverOrphanedAgents_SkipsTracked(t *testing.T) {
+	mg := &mockGit{}
+	mt := &mockTmux{
+		paneExistsResult: true,
+		listWindowsResult: map[string]tmux.WindowInfo{
+			"tracked-branch": {ID: "@7", PaneID: "%12"},
+		},
+	}
+	mm := &mockMonitor{}
+
+	dir := t.TempDir()
+	store := agent.NewStore()
+	o := New(
+		context.Background(),
+		store,
+		"/repo",
+		"test-session",
+		dir,
+		WithGit(mg),
+		WithTmux(mt),
+		WithMonitor(mm),
+	)
+
+	// Add an existing agent with this branch
+	existing := agent.NewAgent("tracked-branch", "main", filepath.Join(dir, "tracked-branch"), "@7", "%12")
+	store.Add(existing)
+
+	// Create the worktree dir
+	if err := os.MkdirAll(filepath.Join(dir, "tracked-branch"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	discovered := o.discoverOrphanedAgents()
+	if discovered != 0 {
+		t.Errorf("expected 0 discovered, got %d", discovered)
+	}
+}
+
+func TestWriteAndReadAgentMetadata(t *testing.T) {
+	dir := t.TempDir()
+	writeAgentMetadata(dir, "feature-branch")
+
+	meta := readAgentMetadata(dir)
+	if meta == nil {
+		t.Fatal("expected metadata, got nil")
+	}
+	if meta.BaseBranch != "feature-branch" {
+		t.Errorf("base branch = %q, want %q", meta.BaseBranch, "feature-branch")
+	}
+}
+
+func TestReadAgentMetadata_Missing(t *testing.T) {
+	dir := t.TempDir()
+	meta := readAgentMetadata(dir)
+	if meta != nil {
+		t.Errorf("expected nil for missing metadata, got %+v", meta)
 	}
 }
