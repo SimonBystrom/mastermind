@@ -3,7 +3,10 @@ package git
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -153,23 +156,65 @@ func ConflictFiles(wtPath string) ([]string, error) {
 }
 
 // CopyUncommittedChanges generates a diff of all uncommitted changes (staged
-// and unstaged) in srcWT and applies it to dstWT. Untracked files are not
-// included. Returns nil when there are no uncommitted changes to copy.
+// and unstaged) in srcWT and applies it to dstWT. Untracked files (newly
+// created, non-ignored) are also copied. Returns nil when there are no
+// uncommitted changes to copy.
 func CopyUncommittedChanges(srcWT, dstWT string) error {
+	// Apply tracked-file diffs (staged + unstaged).
 	diff, err := exec.Command("git", "-C", srcWT, "diff", "HEAD").Output()
 	if err != nil {
 		return fmt.Errorf("diff uncommitted changes: %w", err)
 	}
-	if len(diff) == 0 {
-		return nil
+	if len(diff) > 0 {
+		cmd := exec.Command("git", "-C", dstWT, "apply", "--allow-empty")
+		cmd.Stdin = bytes.NewReader(diff)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("apply uncommitted changes: %s (%w)", strings.TrimSpace(string(out)), err)
+		}
 	}
-	cmd := exec.Command("git", "-C", dstWT, "apply", "--allow-empty")
-	cmd.Stdin = bytes.NewReader(diff)
-	out, err := cmd.CombinedOutput()
+
+	// Copy untracked (newly created, non-ignored) files.
+	untrackedOut, err := exec.Command("git", "-C", srcWT, "ls-files", "--others", "--exclude-standard").Output()
 	if err != nil {
-		return fmt.Errorf("apply uncommitted changes: %s (%w)", strings.TrimSpace(string(out)), err)
+		return fmt.Errorf("list untracked files: %w", err)
+	}
+	for _, relPath := range strings.Split(strings.TrimSpace(string(untrackedOut)), "\n") {
+		if relPath == "" {
+			continue
+		}
+		if err := copyFile(filepath.Join(srcWT, relPath), filepath.Join(dstWT, relPath)); err != nil {
+			return fmt.Errorf("copy untracked file %s: %w", relPath, err)
+		}
 	}
 	return nil
+}
+
+// copyFile copies a single file from src to dst, creating parent directories
+// as needed and preserving the source file's permissions.
+func copyFile(src, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
 }
 
 func IsBranchCheckedOut(repoPath, branch string) (bool, error) {
