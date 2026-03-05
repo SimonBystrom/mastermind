@@ -90,6 +90,8 @@ type Orchestrator struct {
 	agentTeams      bool
 	teammateMode    string
 	skipPermissions bool
+	promptEditor     bool
+	promptEditorSize int
 
 	// Performance caches (monitor loop only, no mutex needed)
 	idleHasChanges       map[string]*bool       // agentID → cached HasChanges result for idle agents
@@ -144,6 +146,16 @@ func WithSkipPermissions(enabled bool) Option {
 	return func(o *Orchestrator) { o.skipPermissions = enabled }
 }
 
+// WithPromptEditor opens an nvim split pane for drafting prompts when spawning agents.
+func WithPromptEditor(enabled bool) Option {
+	return func(o *Orchestrator) { o.promptEditor = enabled }
+}
+
+// WithPromptEditorSize sets the prompt editor pane size percentage.
+func WithPromptEditorSize(pct int) Option {
+	return func(o *Orchestrator) { o.promptEditorSize = pct }
+}
+
 func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
 		ctx:                  ctx,
@@ -156,6 +168,7 @@ func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir
 		git:                  git.RealGit{},
 		tmux:                 tmux.RealTmux{},
 		lazygitSplit:         80,
+		promptEditorSize:    50,
 		agentTeams:           true,
 		teammateMode:         "in-process",
 		idleHasChanges:       make(map[string]*bool),
@@ -222,6 +235,22 @@ func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) 
 
 	a := agent.NewAgent(branch, baseBranch, wtPath, windowID, paneID)
 	o.store.Add(a)
+
+	// Open prompt editor split pane if enabled
+	if o.promptEditor {
+		promptFile := filepath.Join(wtPath, "prompt.txt")
+		if err := os.WriteFile(promptFile, []byte{}, 0o644); err != nil {
+			slog.Warn("failed to create prompt file", "path", promptFile, "error", err)
+		} else {
+			if err := appendGitExclude(wtPath, "prompt.txt", ""); err != nil {
+				slog.Warn("failed to exclude prompt.txt from git", "path", wtPath, "error", err)
+			}
+			_, err := o.tmux.SplitWindow(paneID, wtPath, false, o.promptEditorSize, []string{"nvim", promptFile})
+			if err != nil {
+				slog.Warn("failed to open prompt editor pane", "error", err)
+			}
+		}
+	}
 
 	// Write agent metadata so orphaned worktrees can be rediscovered
 	writeAgentMetadata(wtPath, baseBranch)

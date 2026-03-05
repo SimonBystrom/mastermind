@@ -48,6 +48,8 @@ type Claude struct {
 	AgentTeams      bool   `toml:"agent_teams"`
 	TeammateMode    string `toml:"teammate_mode"`
 	SkipPermissions bool   `toml:"skip_permissions"`
+	PromptEditor    bool   `toml:"prompt_editor"`
+	PromptEditorSize int  `toml:"prompt_editor_size"`
 }
 
 // Config is the top-level configuration.
@@ -92,8 +94,9 @@ func Default() Config {
 			LazygitSplit:   80,
 		},
 		Claude: Claude{
-			AgentTeams:   true,
-			TeammateMode: "in-process",
+			AgentTeams:       true,
+			TeammateMode:     "in-process",
+			PromptEditorSize: 50,
 		},
 	}
 }
@@ -169,6 +172,8 @@ const defaultFileContent = `# Mastermind configuration
 # agent_teams      = true   # enable Claude Code agent teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS)
 # teammate_mode    = "in-process"  # teammate mode for agent team collaboration
 # skip_permissions = false  # pass --dangerously-skip-permissions to all spawned agents
+# prompt_editor      = false  # open nvim in a split pane for drafting prompts
+# prompt_editor_size = 50     # percentage of window height for the prompt editor pane
 `
 
 // WriteDefault writes the default config file with all values commented out.

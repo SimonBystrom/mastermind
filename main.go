@@ -130,6 +130,8 @@ func main() {
 		orchestrator.WithAgentTeams(cfg.Claude.AgentTeams),
 		orchestrator.WithTeammateMode(cfg.Claude.TeammateMode),
 		orchestrator.WithSkipPermissions(cfg.Claude.SkipPermissions),
+		orchestrator.WithPromptEditor(cfg.Claude.PromptEditor),
+		orchestrator.WithPromptEditorSize(cfg.Claude.PromptEditorSize),
 	)
 
 	// Recover agents from previous session
