@@ -11,10 +11,25 @@ import (
 
 func CreateWorktree(repoPath, worktreeDir, branch string) (string, error) {
 	wtPath := filepath.Join(worktreeDir, branch)
-	err := exec.Command("git", "-C", repoPath, "worktree", "add", wtPath, branch).Run()
+	out, err := exec.Command("git", "-C", repoPath, "worktree", "add", wtPath, branch).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to create worktree at %s for branch %s: %w", wtPath, branch, err)
+		return "", fmt.Errorf("failed to create worktree at %s for branch %s: %w\n%s", wtPath, branch, err, out)
 	}
+
+	// Verify the worktree actually checked out the requested branch.
+	// This guards against git silently checking out a different branch.
+	headOut, err := exec.Command("git", "-C", wtPath, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if err != nil {
+		// Cleanup the possibly-bad worktree
+		_ = exec.Command("git", "-C", repoPath, "worktree", "remove", wtPath, "--force").Run()
+		return "", fmt.Errorf("failed to verify worktree branch: %w", err)
+	}
+	actual := strings.TrimSpace(string(headOut))
+	if actual != branch {
+		_ = exec.Command("git", "-C", repoPath, "worktree", "remove", wtPath, "--force").Run()
+		return "", fmt.Errorf("worktree checked out %q instead of requested %q", actual, branch)
+	}
+
 	return wtPath, nil
 }
 

@@ -36,7 +36,8 @@ var statusOrder = map[agent.Status]int{
 	agent.StatusRunning:     5,
 	agent.StatusReviewing:   6,
 	agent.StatusDone:        7,
-	agent.StatusDismissed:   8,
+	agent.StatusOrphaned:    0,
+	agent.StatusDismissed:   9,
 }
 
 type dashboardKeyMap struct {
@@ -44,6 +45,7 @@ type dashboardKeyMap struct {
 	Focus      key.Binding
 	Preview    key.Binding
 	Merge      key.Binding
+	Resume     key.Binding
 	Prune      key.Binding
 	Dismiss    key.Binding
 	DismissDel key.Binding
@@ -57,6 +59,7 @@ func newDashboardKeyMap() dashboardKeyMap {
 		Focus:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter:", "focus")),
 		Preview:    key.NewBinding(key.WithKeys("p"), key.WithHelp("p:", "preview")),
 		Merge:      key.NewBinding(key.WithKeys("m"), key.WithHelp("m:", "merge")),
+		Resume:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r:", "resume")),
 		Prune:      key.NewBinding(key.WithKeys("w"), key.WithHelp("w:", "prune wt")),
 		Dismiss:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d:", "dismiss")),
 		DismissDel: key.NewBinding(key.WithKeys("D"), key.WithHelp("D:", "dismiss+del")),
@@ -66,12 +69,12 @@ func newDashboardKeyMap() dashboardKeyMap {
 }
 
 func (k dashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.New, k.Focus, k.Preview, k.Merge, k.Prune, k.Dismiss, k.DismissDel, k.Sort, k.Quit}
+	return []key.Binding{k.New, k.Focus, k.Preview, k.Merge, k.Resume, k.Prune, k.Dismiss, k.DismissDel, k.Sort, k.Quit}
 }
 
 func (k dashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.New, k.Focus, k.Preview, k.Merge, k.Prune},
+		{k.New, k.Focus, k.Preview, k.Merge, k.Resume, k.Prune},
 		{k.Dismiss, k.DismissDel, k.Sort, k.Quit},
 	}
 }
@@ -83,6 +86,12 @@ type notification struct {
 }
 
 type tickMsg time.Time
+
+type resumeSuccessMsg struct{ agentID string }
+type resumeErrorMsg struct {
+	agentID string
+	err     string
+}
 
 type dashboardModel struct {
 	store         *agent.Store
@@ -266,6 +275,18 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 		}
 		return m, nil
 
+	case resumeSuccessMsg:
+		m.addNotification(notification{
+			text:  fmt.Sprintf("Resumed agent %s", msg.agentID),
+			time:  time.Now(),
+			style: m.styles.Running,
+		})
+		return m, nil
+
+	case resumeErrorMsg:
+		m.err = fmt.Sprintf("resume %s: %s", msg.agentID, msg.err)
+		return m, nil
+
 	case orchestrator.AgentWaitingMsg:
 		name := msg.AgentID
 		var text string
@@ -410,6 +431,18 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 						agentName:    name,
 						branch:       a.Branch,
 						deleteBranch: true,
+					}
+				}
+			}
+		case "r":
+			if len(agents) > 0 && m.cursor < len(agents) {
+				a := agents[m.cursor]
+				if a.GetStatus() == agent.StatusOrphaned {
+					return m, func() tea.Msg {
+						if err := m.orch.ResumeAgent(a.ID); err != nil {
+							return resumeErrorMsg{agentID: a.ID, err: err.Error()}
+						}
+						return resumeSuccessMsg{agentID: a.ID}
 					}
 				}
 			}
@@ -585,6 +618,8 @@ func (m dashboardModel) ViewContent() string {
 				styledStatus = m.styles.Previewing.Render("previewing")
 			case agent.StatusConflicts:
 				styledStatus = m.styles.Conflicts.Render("conflicts")
+			case agent.StatusOrphaned:
+				styledStatus = m.styles.Attention.Render("orphaned")
 			default:
 				styledStatus = string(status)
 			}
@@ -601,6 +636,8 @@ func (m dashboardModel) ViewContent() string {
 				indicator = " " + m.styles.Previewing.Render("◀")
 			case agent.StatusConflicts:
 				indicator = " " + m.styles.Conflicts.Render("◀")
+			case agent.StatusOrphaned:
+				indicator = " " + m.styles.Attention.Render("◀")
 			case agent.StatusWaiting:
 				if waitingFor == "permission" {
 					indicator = " " + m.styles.Permission.Render("◀")
@@ -744,10 +781,12 @@ func (m dashboardModel) ViewContent() string {
 		selectedStatus == agent.StatusPreviewing)
 	canMerge := hasSelection && (selectedStatus == agent.StatusReviewed ||
 		selectedStatus == agent.StatusReviewReady)
+	canResume := hasSelection && selectedStatus == agent.StatusOrphaned
 
 	m.keys.Focus.SetEnabled(hasSelection)
 	m.keys.Preview.SetEnabled(canPreview)
 	m.keys.Merge.SetEnabled(canMerge)
+	m.keys.Resume.SetEnabled(canResume)
 	m.keys.Prune.SetEnabled(hasSelection)
 	m.keys.Dismiss.SetEnabled(hasSelection)
 	m.keys.DismissDel.SetEnabled(hasSelection)

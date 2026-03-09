@@ -768,6 +768,7 @@ func TestDiscoverOrphanedAgents_DeadPane(t *testing.T) {
 	if err := os.MkdirAll(wtDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeAgentMetadata(wtDir, "main", "")
 
 	o.RecoverAgents()
 
@@ -821,7 +822,7 @@ func TestDiscoverOrphanedAgents_SkipsTracked(t *testing.T) {
 
 func TestWriteAndReadAgentMetadata(t *testing.T) {
 	dir := t.TempDir()
-	writeAgentMetadata(dir, "feature-branch")
+	writeAgentMetadata(dir, "feature-branch", "test-session-123")
 
 	meta := readAgentMetadata(dir)
 	if meta == nil {
@@ -829,6 +830,9 @@ func TestWriteAndReadAgentMetadata(t *testing.T) {
 	}
 	if meta.BaseBranch != "feature-branch" {
 		t.Errorf("base branch = %q, want %q", meta.BaseBranch, "feature-branch")
+	}
+	if meta.SessionID != "test-session-123" {
+		t.Errorf("session id = %q, want %q", meta.SessionID, "test-session-123")
 	}
 }
 

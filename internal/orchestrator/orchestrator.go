@@ -253,13 +253,68 @@ func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) 
 	}
 
 	// Write agent metadata so orphaned worktrees can be rediscovered
-	writeAgentMetadata(wtPath, baseBranch)
+	writeAgentMetadata(wtPath, baseBranch, "")
 	if err := appendGitExclude(wtPath, agentMetadataFile, ""); err != nil {
 		slog.Warn("failed to exclude agent metadata from git", "path", wtPath, "error", err)
 	}
 
 	slog.Info("agent spawned", "id", a.ID, "branch", branch)
 	o.saveState()
+
+	return nil
+}
+
+// ResumeAgent reopens a tmux window for an orphaned agent and resumes
+// the Claude Code session using the stored session ID.
+func (o *Orchestrator) ResumeAgent(id string) error {
+	a, ok := o.store.Get(id)
+	if !ok {
+		return fmt.Errorf("agent %s not found", id)
+	}
+
+	if a.GetStatus() != agent.StatusOrphaned {
+		return fmt.Errorf("agent %s is not orphaned (status: %s)", id, a.GetStatus())
+	}
+
+	// Verify worktree still exists
+	if _, err := os.Stat(a.WorktreePath); os.IsNotExist(err) {
+		return fmt.Errorf("worktree directory no longer exists: %s", a.WorktreePath)
+	}
+
+	// Write Claude Code project settings and hooks
+	if err := o.writeClaudeProjectSettings(a.WorktreePath); err != nil {
+		slog.Warn("failed to write claude project settings", "error", err)
+	}
+	if err := hook.WriteHookFiles(a.WorktreePath); err != nil {
+		slog.Warn("failed to write hook files", "error", err)
+	}
+
+	// Build claude command with optional resume flag
+	claudeCmd := []string{"claude"}
+	if o.skipPermissions {
+		claudeCmd = append(claudeCmd, "--dangerously-skip-permissions")
+	}
+	sessionID := a.GetSessionID()
+	if sessionID != "" {
+		claudeCmd = append(claudeCmd, "--resume", sessionID)
+	}
+
+	paneID, err := o.tmux.NewWindow(o.session, a.Branch, a.WorktreePath, claudeCmd)
+	if err != nil {
+		return fmt.Errorf("create tmux window: %w", err)
+	}
+
+	windowID, _ := o.tmux.WindowIDForPane(paneID)
+
+	// Update the agent's tmux references (these are immutable fields, but
+	// for orphan recovery we need to set them on the existing agent)
+	a.TmuxWindow = windowID
+	a.TmuxPaneID = paneID
+	a.SetStatus(agent.StatusRunning)
+
+	o.store.MarkDirty()
+	o.saveState()
+	slog.Info("resumed orphaned agent", "id", a.ID, "branch", a.Branch, "sessionID", sessionID)
 
 	return nil
 }
@@ -683,7 +738,12 @@ func (o *Orchestrator) readStatuslineCached(a *agent.Agent) {
 		o.statuslineMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: (*agent.StatuslineData)(nil)}
 		return
 	}
+	prevSessionID := a.GetSessionID()
 	a.SetStatuslineData(sd)
+	// Update agent metadata file with session ID for orphan recovery
+	if sd.SessionID != "" && sd.SessionID != prevSessionID {
+		writeAgentMetadata(a.WorktreePath, a.BaseBranch, sd.SessionID)
+	}
 	o.store.MarkDirty()
 	o.statuslineMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: sd}
 }
@@ -1235,6 +1295,9 @@ func (o *Orchestrator) RecoverAgents() {
 		if pa.PreReviewCommit != "" {
 			a.SetPreReviewCommit(pa.PreReviewCommit)
 		}
+		if pa.SessionID != "" {
+			a.SetSessionID(pa.SessionID)
+		}
 		a.SetDurationState(pa.AccumulatedDuration, pa.RunningStartedAt)
 
 		// Read sidecar files immediately so recovered agents have
@@ -1271,12 +1334,13 @@ func (o *Orchestrator) RecoverAgents() {
 // agentMetadata is written to each worktree so orphaned agents can be rediscovered.
 type agentMetadata struct {
 	BaseBranch string `json:"base_branch"`
+	SessionID  string `json:"session_id,omitempty"`
 }
 
 const agentMetadataFile = ".mastermind-agent.json"
 
-func writeAgentMetadata(wtPath, baseBranch string) {
-	data, err := json.Marshal(agentMetadata{BaseBranch: baseBranch})
+func writeAgentMetadata(wtPath, baseBranch, sessionID string) {
+	data, err := json.Marshal(agentMetadata{BaseBranch: baseBranch, SessionID: sessionID})
 	if err != nil {
 		slog.Warn("failed to marshal agent metadata", "error", err)
 		return
@@ -1299,12 +1363,23 @@ func readAgentMetadata(wtPath string) *agentMetadata {
 }
 
 // discoverOrphanedAgents scans for worktrees that have a matching tmux window
-// but are not tracked in the store. It creates Agent entries for them.
+// but are not tracked in the store. It also discovers worktrees without tmux
+// windows (e.g. after a tmux crash) and marks them as orphaned.
 func (o *Orchestrator) discoverOrphanedAgents() int {
-	// Build set of branches already tracked
+	// Build set of branches already tracked in the store
 	tracked := make(map[string]bool)
 	for _, a := range o.store.All() {
 		tracked[a.Branch] = true
+	}
+
+	// Build set of branches that were previously completed/dismissed in persisted state.
+	// These are NOT orphans — they are leftovers from agents whose cleanup hasn't finished.
+	completedBranches := make(map[string]bool)
+	persisted, _ := agent.LoadState(o.statePath)
+	for _, pa := range persisted {
+		if pa.Status == agent.StatusDone || pa.Status == agent.StatusDismissed {
+			completedBranches[pa.Branch] = true
+		}
 	}
 
 	// Get all tmux windows in this session
@@ -1331,67 +1406,92 @@ func (o *Orchestrator) discoverOrphanedAgents() int {
 			continue
 		}
 
-		// Check if a tmux window with this branch name exists
-		winInfo, ok := windows[branch]
-		if !ok {
-			continue
-		}
-
 		wtPath := filepath.Join(o.worktreeDir, branch)
 
-		// Read metadata for base branch
+		// Read metadata — if no metadata file exists, this isn't a mastermind-managed worktree
 		meta := readAgentMetadata(wtPath)
-		baseBranch := ""
-		if meta != nil {
-			baseBranch = meta.BaseBranch
+		if meta == nil {
+			continue
 		}
+		baseBranch := meta.BaseBranch
 
-		// Determine initial status
-		status := agent.StatusRunning
-		paneID := winInfo.PaneID
+		// Check if a tmux window with this branch name exists
+		winInfo, ok := windows[branch]
+		if ok {
+			// Has tmux window — existing orphan discovery logic
+			status := agent.StatusRunning
+			paneID := winInfo.PaneID
 
-		// Check if pane is dead
-		allPanes, paneErr := o.tmux.ListAllPanes(o.session)
-		if paneErr == nil {
-			if info, ok := allPanes[paneID]; ok && info.Dead {
-				if o.git.HasChanges(wtPath) {
-					status = agent.StatusReviewReady
-				} else {
-					status = agent.StatusDone
-				}
-			}
-		}
-
-		// If still running, check hook status
-		if status == agent.StatusRunning {
-			if sf, err := hook.ReadStatus(wtPath); err == nil && sf != nil && !sf.IsStale() {
-				switch sf.Status {
-				case hook.StatusIdle, hook.StatusStopped, hook.StatusWaitingInput:
+			// Check if pane is dead
+			allPanes, paneErr := o.tmux.ListAllPanes(o.session)
+			if paneErr == nil {
+				if info, ok := allPanes[paneID]; ok && info.Dead {
 					if o.git.HasChanges(wtPath) {
 						status = agent.StatusReviewReady
 					} else {
 						status = agent.StatusDone
 					}
-				case hook.StatusWaitingPermission:
-					status = agent.StatusWaiting
 				}
 			}
+
+			// If still running, check hook status
+			if status == agent.StatusRunning {
+				if sf, err := hook.ReadStatus(wtPath); err == nil && sf != nil && !sf.IsStale() {
+					switch sf.Status {
+					case hook.StatusIdle, hook.StatusStopped, hook.StatusWaitingInput:
+						if o.git.HasChanges(wtPath) {
+							status = agent.StatusReviewReady
+						} else {
+							status = agent.StatusDone
+						}
+					case hook.StatusWaitingPermission:
+						status = agent.StatusWaiting
+					}
+				}
+			}
+
+			a := agent.NewAgent(branch, baseBranch, wtPath, winInfo.ID, paneID)
+			a.SetStatus(status)
+			if status == agent.StatusWaiting {
+				a.SetWaitingFor("permission")
+			}
+			a.SetEverActive(true)
+			if meta.SessionID != "" {
+				a.SetSessionID(meta.SessionID)
+			}
+
+			o.readStatuslineCached(a)
+			o.readTodosCached(a)
+
+			o.store.Add(a)
+			discovered++
+			slog.Info("discovered orphaned agent", "id", a.ID, "branch", branch, "status", status)
+		} else {
+			// No tmux window — truly orphaned (e.g. tmux crash)
+			// Skip if this branch was previously completed/dismissed
+			if completedBranches[branch] {
+				continue
+			}
+
+			// Only recover if the worktree has uncommitted changes (work worth saving)
+			if !o.git.HasChanges(wtPath) {
+				continue
+			}
+
+			a := agent.NewAgent(branch, baseBranch, wtPath, "", "")
+			a.SetStatus(agent.StatusOrphaned)
+			a.SetEverActive(true)
+			if meta.SessionID != "" {
+				a.SetSessionID(meta.SessionID)
+			}
+
+			o.readStatuslineCached(a)
+			o.readTodosCached(a)
+
+			o.store.Add(a)
+			discovered++
+			slog.Info("discovered orphaned agent (no tmux window)", "id", a.ID, "branch", branch, "sessionID", meta.SessionID)
 		}
-
-		a := agent.NewAgent(branch, baseBranch, wtPath, winInfo.ID, paneID)
-		a.SetStatus(status)
-		if status == agent.StatusWaiting {
-			a.SetWaitingFor("permission")
-		}
-		a.SetEverActive(true)
-
-		// Read sidecar files
-		o.readStatuslineCached(a)
-		o.readTodosCached(a)
-
-		o.store.Add(a)
-		discovered++
-		slog.Info("discovered orphaned agent", "id", a.ID, "branch", branch, "status", status)
 	}
 
 	return discovered

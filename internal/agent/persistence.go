@@ -23,6 +23,7 @@ type PersistedAgent struct {
 	FinishedAt      time.Time `json:"finished_at"`
 	LazygitPaneID       string        `json:"lazygit_pane_id,omitempty"`
 	PreReviewCommit     string        `json:"pre_review_commit,omitempty"`
+	SessionID           string        `json:"session_id,omitempty"`
 	AccumulatedDuration time.Duration `json:"accumulated_duration"`
 	RunningStartedAt    time.Time     `json:"running_started_at"`
 }
@@ -47,6 +48,7 @@ func SaveState(path string, agents []*Agent) error {
 			FinishedAt:      snap.FinishedAt,
 			LazygitPaneID:       snap.LazygitPaneID,
 			PreReviewCommit:     snap.PreReviewCommit,
+			SessionID:           snap.SessionID,
 			AccumulatedDuration: snap.AccumulatedDuration,
 			RunningStartedAt:    snap.RunningStartedAt,
 		}

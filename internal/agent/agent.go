@@ -19,6 +19,7 @@ const (
 	StatusPreviewing  Status = "previewing"
 	StatusConflicts   Status = "conflicts"
 	StatusDismissed   Status = "dismissed"
+	StatusOrphaned    Status = "orphaned"
 )
 
 type Agent struct {
@@ -48,6 +49,9 @@ type Agent struct {
 	// Duration tracking: only counts time spent in StatusRunning.
 	accumulatedDuration time.Duration // total time accumulated in previous running periods
 	runningStartedAt    time.Time     // when the current running period started (zero if not running)
+
+	// Claude Code session ID (persisted for conversation resumption)
+	sessionID string
 
 	// Claude Code statusline data (read from sidecar file)
 	statuslineData *StatuslineData
@@ -200,6 +204,22 @@ func (a *Agent) SetStatuslineData(sd *StatuslineData) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.statuslineData = sd
+	// Capture session ID from statusline data for persistence
+	if sd != nil && sd.SessionID != "" {
+		a.sessionID = sd.SessionID
+	}
+}
+
+func (a *Agent) GetSessionID() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.sessionID
+}
+
+func (a *Agent) SetSessionID(id string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.sessionID = id
 }
 
 func (a *Agent) GetTodos() []hook.TodoItem {
@@ -245,6 +265,7 @@ type AgentSnapshot struct {
 	FinishedAt          time.Time
 	LazygitPaneID       string
 	PreReviewCommit     string
+	SessionID           string
 	AccumulatedDuration time.Duration
 	RunningStartedAt    time.Time
 	StatuslineData      *StatuslineData
@@ -265,6 +286,7 @@ func (a *Agent) Snapshot() AgentSnapshot {
 		FinishedAt:          a.finishedAt,
 		LazygitPaneID:       a.lazygitPaneID,
 		PreReviewCommit:     a.preReviewCommit,
+		SessionID:           a.sessionID,
 		AccumulatedDuration: a.accumulatedDuration,
 		RunningStartedAt:    a.runningStartedAt,
 		StatuslineData:      a.statuslineData,
