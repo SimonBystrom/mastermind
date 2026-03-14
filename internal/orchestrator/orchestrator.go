@@ -753,10 +753,20 @@ func (o *Orchestrator) readHookStatusCached(worktreePath string) *hook.StatusFil
 	return sf
 }
 
-// readStatuslineCached reads the statusline sidecar file, using mtime to skip re-reads.
+// readStatuslineCached reads the metrics sidecar file, using mtime to skip re-reads.
+// The sidecar filename depends on the agent's harness type.
 func (o *Orchestrator) readStatuslineCached(a *agent.Agent) {
-	path := filepath.Join(a.WorktreePath, ".claude-status.json")
-	info, err := os.Stat(path)
+	// Determine metrics file path based on harness type
+	var metricsFile string
+	switch a.Harness {
+	case harness.TypeOpenCode:
+		metricsFile = ".opencode-status.json"
+	default:
+		metricsFile = ".claude-status.json"
+	}
+	metricsPath := filepath.Join(a.WorktreePath, metricsFile)
+
+	info, err := os.Stat(metricsPath)
 	if err != nil {
 		return
 	}
@@ -767,11 +777,27 @@ func (o *Orchestrator) readStatuslineCached(a *agent.Agent) {
 		}
 		return
 	}
-	sd, err := agent.ReadStatuslineFile(a.WorktreePath)
-	if err != nil {
+
+	// Use harness ReadMetrics to parse the correct sidecar file
+	h, ok := o.harnesses[a.Harness]
+	if !ok {
+		return
+	}
+	md, err := h.ReadMetrics(a.WorktreePath)
+	if err != nil || md == nil {
 		o.statuslineMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: (*agent.StatuslineData)(nil)}
 		return
 	}
+
+	sd := &agent.StatuslineData{
+		Model:        md.Model,
+		CostUSD:      md.CostUSD,
+		ContextPct:   md.ContextPct,
+		LinesAdded:   md.LinesAdded,
+		LinesRemoved: md.LinesRemoved,
+		SessionID:    md.SessionID,
+	}
+
 	prevSessionID := a.GetSessionID()
 	a.SetStatuslineData(sd)
 	// Update agent metadata file with session ID for orphan recovery
