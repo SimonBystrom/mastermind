@@ -24,10 +24,10 @@ const (
 )
 
 type AppModel struct {
-	orch      *orchestrator.Orchestrator
-	store     *agent.Store
-	repoPath  string
-	session   string
+	orch       *orchestrator.Orchestrator
+	store      *agent.Store
+	repoPath   string
+	session    string
 	activeView view
 
 	styles Styles
@@ -255,7 +255,7 @@ func (m AppModel) updateDashboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "n":
 			m.activeView = viewSpawn
-			m.spawn = newSpawn(m.styles, m.orch, m.repoPath, m.width)
+			m.spawn = newSpawn(m.styles, m.orch, m.repoPath, m.width, m.orch.DefaultHarness())
 			return m, m.spawn.Init()
 		}
 	}

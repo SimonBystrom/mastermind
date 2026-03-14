@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/simonbystrom/mastermind/internal/harness"
 	"github.com/simonbystrom/mastermind/internal/hook"
 )
 
@@ -31,6 +32,7 @@ type Agent struct {
 	TmuxWindow   string
 	TmuxPaneID   string
 	StartedAt    time.Time
+	Harness      harness.Type // "claude" or "opencode"
 
 	// Mutable fields (protected by mu)
 	mu              sync.RWMutex
@@ -60,7 +62,7 @@ type Agent struct {
 	todos []hook.TodoItem
 }
 
-func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *Agent {
+func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string, harnessType harness.Type) *Agent {
 	now := time.Now()
 	return &Agent{
 		Branch:           branch,
@@ -69,6 +71,7 @@ func NewAgent(branch, baseBranch, worktreePath, tmuxWindow, tmuxPaneID string) *
 		TmuxWindow:       tmuxWindow,
 		TmuxPaneID:       tmuxPaneID,
 		StartedAt:        now,
+		Harness:          harnessType,
 		status:           StatusRunning,
 		runningStartedAt: now, // starts in running state
 	}

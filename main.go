@@ -16,6 +16,7 @@ import (
 
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/config"
+	"github.com/simonbystrom/mastermind/internal/harness"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 	"github.com/simonbystrom/mastermind/internal/ui"
@@ -124,6 +125,18 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Parse harness type from config
+	var defaultHarness harness.Type
+	switch cfg.Harness.Default {
+	case "opencode":
+		defaultHarness = harness.TypeOpenCode
+	case "claude", "":
+		defaultHarness = harness.TypeClaudeCode
+	default:
+		fmt.Fprintf(os.Stderr, "warning: unknown harness %q, defaulting to claude\n", cfg.Harness.Default)
+		defaultHarness = harness.TypeClaudeCode
+	}
+
 	store := agent.NewStore()
 	orch := orchestrator.New(ctx, store, absRepo, *session, worktreeDir,
 		orchestrator.WithLazygitSplit(cfg.Layout.LazygitSplit),
@@ -132,6 +145,7 @@ func main() {
 		orchestrator.WithSkipPermissions(cfg.Claude.SkipPermissions),
 		orchestrator.WithPromptEditor(cfg.Claude.PromptEditor),
 		orchestrator.WithPromptEditorSize(cfg.Claude.PromptEditorSize),
+		orchestrator.WithDefaultHarness(defaultHarness),
 	)
 
 	// Recover agents from previous session
@@ -209,4 +223,3 @@ func detectTmuxSession() (string, error) {
 	}
 	return name, nil
 }
-

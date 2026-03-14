@@ -552,8 +552,8 @@ func (m dashboardModel) ViewContent() string {
 		{8, 2},  // 7: Lines
 	}
 	const indent = 2
-	const gaps = 8   // 1-char gap between each of 8 cols + indicator
-	const indic = 2  // indicator width
+	const gaps = 8  // 1-char gap between each of 8 cols + indicator
+	const indic = 2 // indicator width
 	totalMin := indent + gaps + indic
 	totalWeight := 0
 	for _, c := range cols {
@@ -664,6 +664,12 @@ func (m dashboardModel) ViewContent() string {
 				linesStr = fmt.Sprintf("+%d -%d", sd.LinesAdded, sd.LinesRemoved)
 			}
 
+			// Harness badge
+			harnessBadge := "[C]"
+			if a.Harness == "opencode" {
+				harnessBadge = "[O]"
+			}
+
 			isSelected := i == m.cursor
 
 			var row string
@@ -681,8 +687,9 @@ func (m dashboardModel) ViewContent() string {
 					}
 				}
 
+				idWithBadge := fmt.Sprintf("%s %s", a.ID, harnessBadge)
 				row = fmt.Sprintf("  %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s  ",
-					colW[0], a.ID,
+					colW[0], idWithBadge,
 					colW[1], truncate(modelStr, colW[1]),
 					colW[2], truncate(a.Branch, colW[2]),
 					colW[3], plainStatus,
@@ -714,8 +721,9 @@ func (m dashboardModel) ViewContent() string {
 					displayCtx += strings.Repeat(" ", colW[6]-w)
 				}
 
+				idWithBadge := fmt.Sprintf("%s %s", a.ID, harnessBadge)
 				row = fmt.Sprintf("  %-*s %-*s %-*s %s %-*s %-*s %s %-*s %s",
-					colW[0], a.ID,
+					colW[0], idWithBadge,
 					colW[1], truncate(modelStr, colW[1]),
 					colW[2], truncate(a.Branch, colW[2]),
 					displayStatus,

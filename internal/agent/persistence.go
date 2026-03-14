@@ -5,22 +5,25 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/simonbystrom/mastermind/internal/harness"
 )
 
 // PersistedAgent is the JSON-serializable representation of an Agent.
 type PersistedAgent struct {
-	ID           string    `json:"id"`
-	Branch       string    `json:"branch"`
-	BaseBranch   string    `json:"base_branch"`
-	WorktreePath string    `json:"worktree_path"`
-	TmuxWindow   string    `json:"tmux_window"`
-	TmuxPaneID   string    `json:"tmux_pane_id"`
-	Status       Status    `json:"status"`
-	WaitingFor   string    `json:"waiting_for"`
-	EverActive      bool      `json:"ever_active"`
-	ExitCode        int       `json:"exit_code"`
-	StartedAt       time.Time `json:"started_at"`
-	FinishedAt      time.Time `json:"finished_at"`
+	ID                  string        `json:"id"`
+	Branch              string        `json:"branch"`
+	BaseBranch          string        `json:"base_branch"`
+	WorktreePath        string        `json:"worktree_path"`
+	TmuxWindow          string        `json:"tmux_window"`
+	TmuxPaneID          string        `json:"tmux_pane_id"`
+	Harness             harness.Type  `json:"harness,omitempty"` // "claude" or "opencode"
+	Status              Status        `json:"status"`
+	WaitingFor          string        `json:"waiting_for"`
+	EverActive          bool          `json:"ever_active"`
+	ExitCode            int           `json:"exit_code"`
+	StartedAt           time.Time     `json:"started_at"`
+	FinishedAt          time.Time     `json:"finished_at"`
 	LazygitPaneID       string        `json:"lazygit_pane_id,omitempty"`
 	PreReviewCommit     string        `json:"pre_review_commit,omitempty"`
 	SessionID           string        `json:"session_id,omitempty"`
@@ -34,18 +37,19 @@ func SaveState(path string, agents []*Agent) error {
 	for i, a := range agents {
 		snap := a.Snapshot()
 		persisted[i] = PersistedAgent{
-			ID:           a.ID,
-			Branch:       a.Branch,
-			BaseBranch:   a.BaseBranch,
-			WorktreePath: a.WorktreePath,
-			TmuxWindow:   a.TmuxWindow,
-			TmuxPaneID:   a.TmuxPaneID,
-			Status:       snap.Status,
-			WaitingFor:   snap.WaitingFor,
-			EverActive:      snap.EverActive,
-			ExitCode:        snap.ExitCode,
-			StartedAt:       a.StartedAt,
-			FinishedAt:      snap.FinishedAt,
+			ID:                  a.ID,
+			Branch:              a.Branch,
+			BaseBranch:          a.BaseBranch,
+			WorktreePath:        a.WorktreePath,
+			TmuxWindow:          a.TmuxWindow,
+			TmuxPaneID:          a.TmuxPaneID,
+			Harness:             a.Harness,
+			Status:              snap.Status,
+			WaitingFor:          snap.WaitingFor,
+			EverActive:          snap.EverActive,
+			ExitCode:            snap.ExitCode,
+			StartedAt:           a.StartedAt,
+			FinishedAt:          snap.FinishedAt,
 			LazygitPaneID:       snap.LazygitPaneID,
 			PreReviewCommit:     snap.PreReviewCommit,
 			SessionID:           snap.SessionID,

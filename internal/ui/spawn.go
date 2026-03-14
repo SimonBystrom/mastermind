@@ -10,13 +10,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/simonbystrom/mastermind/internal/git"
+	"github.com/simonbystrom/mastermind/internal/harness"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 )
 
 type spawnStep int
 
 const (
-	stepChooseMode spawnStep = iota
+	stepChooseHarness spawnStep = iota
+	stepChooseMode
 	stepPickBranch
 	stepNewBranchName
 	stepConfirm
@@ -46,13 +48,18 @@ func (b branchItem) Description() string { return "" }
 func (b branchItem) FilterValue() string { return b.name }
 
 type spawnModel struct {
-	orch     *orchestrator.Orchestrator
-	repoPath string
-	step     spawnStep
-	mode     spawnMode
-	err      string
-	width    int
-	styles   Styles
+	orch            *orchestrator.Orchestrator
+	repoPath        string
+	step            spawnStep
+	mode            spawnMode
+	err             string
+	width           int
+	styles          Styles
+	defaultHarness  harness.Type
+	selectedHarness harness.Type
+
+	// Harness selection
+	harnessCursor int
 
 	// Mode selection
 	modeCursor int
@@ -74,7 +81,7 @@ type spawnModel struct {
 type spawnDoneMsg struct{}
 type spawnCancelMsg struct{}
 
-func newSpawn(s Styles, orch *orchestrator.Orchestrator, repoPath string, width int) spawnModel {
+func newSpawn(s Styles, orch *orchestrator.Orchestrator, repoPath string, width int, defaultHarness harness.Type) spawnModel {
 	bi := textinput.New()
 	bi.Placeholder = "new branch name (e.g. feat/my-feature)"
 
@@ -105,13 +112,15 @@ func newSpawn(s Styles, orch *orchestrator.Orchestrator, repoPath string, width 
 	bl.FilterInput.PromptStyle = s.WizardActive
 
 	return spawnModel{
-		orch:        orch,
-		repoPath:    repoPath,
-		step:        stepChooseMode,
-		branchInput: bi,
-		branchList:  bl,
-		styles:      s,
-		width:       width,
+		orch:            orch,
+		repoPath:        repoPath,
+		step:            stepChooseHarness,
+		branchInput:     bi,
+		branchList:      bl,
+		styles:          s,
+		width:           width,
+		defaultHarness:  defaultHarness,
+		selectedHarness: defaultHarness,
 	}
 }
 
@@ -171,10 +180,14 @@ func (m spawnModel) Update(msg tea.Msg) (spawnModel, tea.Cmd) {
 			if m.step == stepPickBranch && (m.branchList.SettingFilter() || m.branchList.IsFiltered()) {
 				return m.updatePickBranch(msg)
 			}
-			if m.step == stepChooseMode {
+			if m.step == stepChooseHarness {
 				return m, func() tea.Msg { return spawnCancelMsg{} }
 			}
-			// Go back to mode selection
+			// Go back one step
+			if m.step == stepChooseMode {
+				m.step = stepChooseHarness
+				return m, nil
+			}
 			m.step = stepChooseMode
 			m.branchList.ResetFilter()
 			m.branchList.Select(0)
@@ -183,6 +196,8 @@ func (m spawnModel) Update(msg tea.Msg) (spawnModel, tea.Cmd) {
 		}
 
 		switch m.step {
+		case stepChooseHarness:
+			return m.updateChooseHarness(msg)
 		case stepChooseMode:
 			return m.updateChooseMode(msg)
 		case stepPickBranch:
@@ -194,6 +209,29 @@ func (m spawnModel) Update(msg tea.Msg) (spawnModel, tea.Cmd) {
 		}
 	}
 
+	return m, nil
+}
+
+func (m spawnModel) updateChooseHarness(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.harnessCursor > 0 {
+			m.harnessCursor--
+		}
+	case "down", "j":
+		if m.harnessCursor < 1 {
+			m.harnessCursor++
+		}
+	case "enter":
+		// Set selected harness based on cursor
+		if m.harnessCursor == 0 {
+			m.selectedHarness = harness.TypeClaudeCode
+		} else {
+			m.selectedHarness = harness.TypeOpenCode
+		}
+		m.step = stepChooseMode
+		return m, nil
+	}
 	return m, nil
 }
 
@@ -280,7 +318,7 @@ func (m spawnModel) updateNewBranchName(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 func (m spawnModel) updateConfirm(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 	switch msg.String() {
 	case "y", "enter":
-		err := m.orch.SpawnAgent(m.branch, m.baseBranch, m.createBranch)
+		err := m.orch.SpawnAgent(m.branch, m.baseBranch, m.createBranch, m.selectedHarness)
 		if err != nil {
 			m.err = err.Error()
 			return m, nil
@@ -293,7 +331,6 @@ func (m spawnModel) updateConfirm(msg tea.KeyMsg) (spawnModel, tea.Cmd) {
 	return m, nil
 }
 
-
 func (m spawnModel) ViewContent() string {
 	var b strings.Builder
 
@@ -301,6 +338,37 @@ func (m spawnModel) ViewContent() string {
 	b.WriteString("\n\n")
 
 	switch m.step {
+	case stepChooseHarness:
+		b.WriteString(m.styles.WizardActive.Render("Choose AI coding assistant"))
+		b.WriteString("\n\n")
+
+		options := []struct {
+			label string
+			desc  string
+		}{
+			{"Claude Code", "Use Anthropic's Claude Code CLI"},
+			{"OpenCode", "Use OpenCode (requires: opencode CLI installed)"},
+		}
+		for i, opt := range options {
+			cursor := "  "
+			if i == m.harnessCursor {
+				cursor = "> "
+			}
+			line := fmt.Sprintf("%s%s", cursor, opt.label)
+			if i == m.harnessCursor {
+				b.WriteString(m.styles.WizardActive.Render(line))
+				b.WriteString("\n")
+				b.WriteString(m.styles.WizardDim.Render("    " + opt.desc))
+			} else {
+				b.WriteString("  " + opt.label)
+				b.WriteString("\n")
+				b.WriteString(m.styles.WizardDim.Render("    " + opt.desc))
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+		b.WriteString(m.styles.Help.Render("  enter: select │ esc: cancel"))
+
 	case stepChooseMode:
 		b.WriteString(m.styles.WizardActive.Render("How do you want to set up the branch?"))
 		b.WriteString("\n\n")

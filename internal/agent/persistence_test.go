@@ -11,7 +11,7 @@ func TestSaveAndLoadState(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
 
-	a := NewAgent("feat/x", "main", "/tmp/wt", "@1", "%0")
+	a := NewAgent("feat/x", "main", "/tmp/wt", "@1", "%0", "claude")
 	a.ID = "a1"
 	a.SetStatus(StatusReviewReady)
 	a.SetWaitingFor("permission")

@@ -8,9 +8,9 @@ func TestClassifyStablePane(t *testing.T) {
 	m := NewPaneMonitor()
 
 	tests := []struct {
-		name            string
-		content         string
-		wantWaitingFor  string
+		name             string
+		content          string
+		wantWaitingFor   string
 		wantNumberedList bool
 	}{
 		{
@@ -79,45 +79,45 @@ func TestClassifyStablePane(t *testing.T) {
 			wantWaitingFor: "",
 		},
 		{
-			name:            "numbered list detected",
-			content:         "\n\nWhich approach?\n1. Option A\n2. Option B\n3. Option C\nChat about this\n",
-			wantWaitingFor:  "permission",
+			name:             "numbered list detected",
+			content:          "\n\nWhich approach?\n1. Option A\n2. Option B\n3. Option C\nChat about this\n",
+			wantWaitingFor:   "permission",
 			wantNumberedList: true,
 		},
 		{
-			name:            "numbered list at input prompt",
-			content:         "\n\n1. First item\n2. Second item\nfor shortcuts\n",
-			wantWaitingFor:  "input",
+			name:             "numbered list at input prompt",
+			content:          "\n\n1. First item\n2. Second item\nfor shortcuts\n",
+			wantWaitingFor:   "input",
 			wantNumberedList: true,
 		},
 		{
-			name:            "single numbered item is not a list",
-			content:         "\n\n1. Only one item\nfor shortcuts\n",
-			wantWaitingFor:  "input",
+			name:             "single numbered item is not a list",
+			content:          "\n\n1. Only one item\nfor shortcuts\n",
+			wantWaitingFor:   "input",
 			wantNumberedList: false,
 		},
 		{
-			name:            "completion summary is not a prompt",
-			content:         "\n\n1. Fixed the authentication bug\n2. Updated the test cases\n3. Refactored error handling\nfor shortcuts\n",
-			wantWaitingFor:  "input",
+			name:             "completion summary is not a prompt",
+			content:          "\n\n1. Fixed the authentication bug\n2. Updated the test cases\n3. Refactored error handling\nfor shortcuts\n",
+			wantWaitingFor:   "input",
 			wantNumberedList: false,
 		},
 		{
-			name:            "completion summary with various verbs",
-			content:         "\n\n1. Added new validation logic\n2. Removed deprecated imports\n3. Cleaned up unused variables\n4. Implemented retry mechanism\nfor shortcuts\n",
-			wantWaitingFor:  "input",
+			name:             "completion summary with various verbs",
+			content:          "\n\n1. Added new validation logic\n2. Removed deprecated imports\n3. Cleaned up unused variables\n4. Implemented retry mechanism\nfor shortcuts\n",
+			wantWaitingFor:   "input",
 			wantNumberedList: false,
 		},
 		{
-			name:            "mixed list with mostly summary verbs",
-			content:         "\n\n1. Fixed the bug\n2. Updated tests\n3. Check the output\nfor shortcuts\n",
-			wantWaitingFor:  "input",
+			name:             "mixed list with mostly summary verbs",
+			content:          "\n\n1. Fixed the bug\n2. Updated tests\n3. Check the output\nfor shortcuts\n",
+			wantWaitingFor:   "input",
 			wantNumberedList: false,
 		},
 		{
-			name:            "actual prompt options not filtered",
-			content:         "\n\nWhich approach?\n1. Use Redis caching\n2. Use in-memory cache\n3. Use file-based cache\nChat about this\n",
-			wantWaitingFor:  "permission",
+			name:             "actual prompt options not filtered",
+			content:          "\n\nWhich approach?\n1. Use Redis caching\n2. Use in-memory cache\n3. Use file-based cache\nChat about this\n",
+			wantWaitingFor:   "permission",
 			wantNumberedList: true,
 		},
 	}
@@ -174,7 +174,6 @@ func TestClassifyUnstablePane(t *testing.T) {
 		})
 	}
 }
-
 
 func TestParseStatuslineFromContent(t *testing.T) {
 	tests := []struct {
@@ -234,6 +233,48 @@ func TestParseStatuslineFromContent(t *testing.T) {
 				CostUSD:      0.05,
 				LinesAdded:   100,
 				LinesRemoved: 50,
+			},
+		},
+		{
+			name: "opencode project overview format",
+			content: `Project overview
+
+Context
+18,351 tokens
+9% used
+$0.09 spent
+
+LSP
+• gopls
+
+~/code/mastermind/.worktrees/testing/opencode:testing/opencode
+
+• OpenCode 1.2.26`,
+			want: &StatuslineFromPane{
+				Model:        "",
+				ContextPct:   9,
+				CostUSD:      0.09,
+				LinesAdded:   0,
+				LinesRemoved: 0,
+			},
+		},
+		{
+			name: "opencode with higher values",
+			content: `Project overview
+
+Context
+125,000 tokens
+85% used
+$5.43 spent
+
+LSP
+• gopls`,
+			want: &StatuslineFromPane{
+				Model:        "",
+				ContextPct:   85,
+				CostUSD:      5.43,
+				LinesAdded:   0,
+				LinesRemoved: 0,
 			},
 		},
 	}

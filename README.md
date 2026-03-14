@@ -36,13 +36,14 @@ This builds the binary and installs it to `/usr/local/bin`.
 
 ## Prerequisites
 
-| Dependency | Install |
-|---|---|
-| **tmux** 3.0+ | `brew install tmux` |
-| **git** | `brew install git` (or via Xcode CLT) |
-| **claude** | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) |
-| **lazygit** | `brew install lazygit` |
-| **jq** | `brew install jq` |
+| Dependency | Install | Required For |
+|---|---|---|
+| **tmux** 3.0+ | `brew install tmux` | All agents |
+| **git** | `brew install git` (or via Xcode CLT) | All agents |
+| **lazygit** | `brew install lazygit` | All agents (review/merge) |
+| **jq** | `brew install jq` | All agents |
+| **claude** | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | Claude Code agents |
+| **opencode** | [OpenCode CLI](https://opencode.ai/docs/) | OpenCode agents (optional) |
 
 ## Usage
 
@@ -71,6 +72,9 @@ Mastermind reads its config from `$XDG_CONFIG_HOME/mastermind/mastermind.conf` (
 The config uses TOML format:
 
 ```toml
+[harness]
+# default = "claude"  # Default AI assistant: "claude" or "opencode"
+
 [colors]
 # Values can be hex (#rrggbb) or xterm-256 codes (0-255).
 # Defaults use the Catppuccin Mocha palette.
@@ -114,8 +118,9 @@ The config uses TOML format:
 
 ## Features
 
-- **Parallel agents** — run multiple Claude Code instances simultaneously, each isolated in its own git worktree and branch
-- **Hybrid status monitoring** — uses Claude Code hooks for instant status updates, with tmux pane polling as a fallback. Hook events fire on tool use, permission prompts, input prompts, and session stop/end. If hook data is stale (>30s), falls back to polling pane content every 2s with SHA256 stable-content hashing
+- **Multi-harness support** — spawn agents using either Claude Code or OpenCode, mix and match in the same session
+- **Parallel agents** — run multiple AI coding assistant instances simultaneously, each isolated in its own git worktree and branch
+- **Hybrid status monitoring** — uses harness-specific hooks/plugins for instant status updates, with tmux pane polling as a fallback. Events fire on tool use, permission prompts, and session lifecycle. If hook data is stale (>30s), falls back to polling pane content every 2s with SHA256 stable-content hashing
 - **Statusline integration** — captures Claude Code's statusline JSON output per agent, showing model name, cost ($USD), context window usage (%), and lines added/removed directly in the dashboard
 - **Branch preview** — preview an agent's uncommitted changes against its base branch without leaving the dashboard. Opens a temporary diff view in lazygit; the preview is cleaned up automatically on exit
 - **Spawn wizard** — multi-step wizard to select a base branch, create or pick a branch, and name the agent, rendered side-by-side with the dashboard

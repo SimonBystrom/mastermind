@@ -217,14 +217,17 @@ func detectNumberedList(bottomLines []string) bool {
 	return summaryVerbs < numbered/2
 }
 
-// ParseStatuslineFromContent extracts Claude Code statusline data from raw pane
-// content. The statusline format (ANSI stripped by tmux capture-pane) is:
-// ➜  dirname git:(branch) [ctx: XX%] +N -N $X.XXXX  model
+// ParseStatuslineFromContent extracts statusline data from raw pane content.
+// Supports both Claude Code and OpenCode formats:
+// Claude Code: ➜  dirname git:(branch) [ctx: XX%] +N -N $X.XXXX  model
+// OpenCode: Project overview section with "Context", "X% used", "$X.XX spent"
 func ParseStatuslineFromContent(content string) *StatuslineFromPane {
 	if content == "" {
 		return nil
 	}
 	lines := strings.Split(content, "\n")
+
+	// First try Claude Code statusline format
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
 		match := statuslineRegex.FindStringSubmatch(line)
@@ -255,6 +258,71 @@ func ParseStatuslineFromContent(content string) *StatuslineFromPane {
 			}
 		}
 	}
+
+	// Try OpenCode "Project overview" format
+	result := parseOpenCodeOverview(lines)
+	if result != nil {
+		return result
+	}
+
+	return nil
+}
+
+// parseOpenCodeOverview extracts metrics from OpenCode's "Project overview" section.
+// Expected format:
+//
+//	Context
+//	18,351 tokens
+//	9% used
+//	$0.09 spent
+func parseOpenCodeOverview(lines []string) *StatuslineFromPane {
+	var ctxPct float64
+	var cost float64
+	foundContext := false
+
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Look for "Context" header
+		if line == "Context" {
+			foundContext = true
+			continue
+		}
+
+		// After finding Context, look for percentage and cost
+		if foundContext {
+			// Match "X% used"
+			if match := openCodeCtxPctRegex.FindStringSubmatch(line); match != nil {
+				ctxPct, _ = strconv.ParseFloat(match[1], 64)
+			}
+			// Match "$X.XX spent"
+			if match := openCodeCostRegex.FindStringSubmatch(line); match != nil {
+				cost, _ = strconv.ParseFloat(match[1], 64)
+			}
+
+			// Look ahead a few lines to find both metrics
+			if i+3 < len(lines) {
+				for j := i; j < i+3 && j < len(lines); j++ {
+					nextLine := strings.TrimSpace(lines[j])
+					if match := openCodeCtxPctRegex.FindStringSubmatch(nextLine); match != nil {
+						ctxPct, _ = strconv.ParseFloat(match[1], 64)
+					}
+					if match := openCodeCostRegex.FindStringSubmatch(nextLine); match != nil {
+						cost, _ = strconv.ParseFloat(match[1], 64)
+					}
+				}
+			}
+
+			// If we found at least one metric, return it
+			if ctxPct > 0 || cost > 0 {
+				return &StatuslineFromPane{
+					ContextPct: ctxPct,
+					CostUSD:    cost,
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -275,6 +343,12 @@ var statuslineRegex = regexp.MustCompile(`➜\s+\S+\s+(?:git:\([^)]+\)\s+)?\[ctx
 // (both added and removed are 0, so the script omits them):
 // ➜  dirname git:(branch) [ctx: XX%] $X.XXXX  model
 var statuslineNoDiffRegex = regexp.MustCompile(`➜\s+\S+\s+(?:git:\([^)]+\)\s+)?\[ctx:\s+(\d+)%\]\s+\$([0-9.]+)\s+(.+)`)
+
+// openCodeCtxPctRegex matches OpenCode's context percentage format: "9% used"
+var openCodeCtxPctRegex = regexp.MustCompile(`^(\d+)%\s+used$`)
+
+// openCodeCostRegex matches OpenCode's cost format: "$0.09 spent"
+var openCodeCostRegex = regexp.MustCompile(`^\$([0-9.]+)\s+spent$`)
 
 func capturePane(paneID string) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
