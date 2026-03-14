@@ -68,9 +68,9 @@ func TestSortedAgents_ByID(t *testing.T) {
 	d, store := newTestDashboard(t)
 	d.sortBy = sortByID
 
-	a1 := agent.NewAgent("b1", "main", "/wt1", "@1", "%1")
+	a1 := agent.NewAgent("b1", "main", "/wt1", "@1", "%1", "claude")
 	a1.ID = "a1"
-	a2 := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
+	a2 := agent.NewAgent("b2", "main", "/wt2", "@2", "%2", "claude")
 	a2.ID = "a2"
 	store.Add(a2) // add in reverse order
 	store.Add(a1)
@@ -88,11 +88,11 @@ func TestSortedAgents_ByStatus(t *testing.T) {
 	d, store := newTestDashboard(t)
 	d.sortBy = sortByStatus
 
-	running := agent.NewAgent("b1", "main", "/wt1", "@1", "%1")
+	running := agent.NewAgent("b1", "main", "/wt1", "@1", "%1", "claude")
 	running.ID = "r1"
 	running.SetStatus(agent.StatusRunning)
 
-	waiting := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
+	waiting := agent.NewAgent("b2", "main", "/wt2", "@2", "%2", "claude")
 	waiting.ID = "w1"
 	waiting.SetStatus(agent.StatusWaiting)
 
@@ -110,10 +110,10 @@ func TestSortedAgents_ByDuration(t *testing.T) {
 	d, store := newTestDashboard(t)
 	d.sortBy = sortByDuration
 
-	newer := agent.NewAgent("b1", "main", "/wt1", "@1", "%1")
+	newer := agent.NewAgent("b1", "main", "/wt1", "@1", "%1", "claude")
 	newer.ID = "n1"
 
-	older := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
+	older := agent.NewAgent("b2", "main", "/wt2", "@2", "%2", "claude")
 	older.ID = "o1"
 	// Give older agent a large accumulated duration so it sorts first
 	older.SetDurationState(10*time.Minute, time.Time{})
@@ -140,7 +140,7 @@ func TestDashboard_ViewContent_NoAgents(t *testing.T) {
 func TestDashboard_ViewContent_WithAgents(t *testing.T) {
 	d, store := newTestDashboard(t)
 
-	a := agent.NewAgent("feat/build", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/build", "main", "/wt", "@1", "%1", "claude")
 	store.Add(a)
 
 	content := d.ViewContent()
@@ -155,9 +155,9 @@ func TestDashboard_ViewContent_WithAgents(t *testing.T) {
 func TestDashboard_CursorNavigation(t *testing.T) {
 	d, store := newTestDashboard(t)
 
-	a1 := agent.NewAgent("b1", "main", "/wt1", "@1", "%1")
+	a1 := agent.NewAgent("b1", "main", "/wt1", "@1", "%1", "claude")
 	a1.ID = "a1"
-	a2 := agent.NewAgent("b2", "main", "/wt2", "@2", "%2")
+	a2 := agent.NewAgent("b2", "main", "/wt2", "@2", "%2", "claude")
 	a2.ID = "a2"
 	store.Add(a1)
 	store.Add(a2)
@@ -259,7 +259,7 @@ func TestRenderTodoLine(t *testing.T) {
 func TestDashboard_Notifications(t *testing.T) {
 	d, store := newTestDashboard(t)
 
-	a := agent.NewAgent("feat/n", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/n", "main", "/wt", "@1", "%1", "claude")
 	store.Add(a)
 
 	d, _ = d.Update(orchestrator.AgentFinishedMsg{

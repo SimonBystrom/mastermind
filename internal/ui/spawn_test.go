@@ -17,14 +17,14 @@ func newTestSpawn(t *testing.T) spawnModel {
 	t.Helper()
 	store := agent.NewStore()
 	orch := orchestrator.New(context.Background(), store, "/repo", "test", t.TempDir())
-	return newSpawn(NewStyles(config.Default().Colors), orch, "/repo", 120)
+	return newSpawn(NewStyles(config.Default().Colors), orch, "/repo", 120, "claude")
 }
 
 func TestSpawn_InitialStep(t *testing.T) {
 	m := newTestSpawn(t)
 
-	if m.step != stepChooseMode {
-		t.Errorf("initial step = %d, want %d (stepChooseMode)", m.step, stepChooseMode)
+	if m.step != stepChooseHarness {
+		t.Errorf("initial step = %d, want %d (stepChooseHarness)", m.step, stepChooseHarness)
 	}
 }
 
@@ -43,21 +43,36 @@ func TestSpawn_EscCancels(t *testing.T) {
 
 func TestSpawn_ChooseMode_ExistingBranch(t *testing.T) {
 	m := newTestSpawn(t)
-	m.modeCursor = 0
 
+	// Simulate branches loaded
+	m.Update(branchesLoadedMsg{
+		branches: []git.Branch{
+			{Name: "main", Current: true},
+			{Name: "feat/x", Current: false},
+		},
+	})
+
+	// Select harness first (default is Claude Code at cursor 0)
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Move to existing branch option (default cursor position)
+	// Press enter
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
 	if m.step != stepPickBranch {
 		t.Errorf("step = %d, want %d (stepPickBranch)", m.step, stepPickBranch)
-	}
-	if m.mode != modeExisting {
-		t.Errorf("mode = %d, want %d (modeExisting)", m.mode, modeExisting)
 	}
 }
 
 func TestSpawn_ChooseMode_NewBranch(t *testing.T) {
 	m := newTestSpawn(t)
-	// Move to "Create new branch" option
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+
+	// Select harness first (default is Claude Code at cursor 0)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Move cursor down to "new branch"
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	// Press enter
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 	if m.step != stepNewBranchName {
@@ -95,15 +110,24 @@ func TestSpawn_BranchesLoadedMsg(t *testing.T) {
 
 func TestSpawn_ViewContent_ChooseMode(t *testing.T) {
 	m := newTestSpawn(t)
-
-	content := m.ViewContent()
-	if !strings.Contains(content, "Spawn New Agent") {
-		t.Error("should show title")
+	
+	// Should start at harness selection
+	view := m.View()
+	if !strings.Contains(view, "Claude Code") {
+		t.Error("should show Claude Code option")
 	}
-	if !strings.Contains(content, "existing branch") {
+	if !strings.Contains(view, "OpenCode") {
+		t.Error("should show OpenCode option")
+	}
+
+	// Select harness to move to mode selection
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	view = m.View()
+
+	if !strings.Contains(view, "Use existing branch") {
 		t.Error("should show existing branch option")
 	}
-	if !strings.Contains(content, "new branch") {
+	if !strings.Contains(view, "Create new branch") {
 		t.Error("should show new branch option")
 	}
 }

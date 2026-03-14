@@ -17,6 +17,9 @@ import (
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/git"
+	"github.com/simonbystrom/mastermind/internal/harness"
+	"github.com/simonbystrom/mastermind/internal/harness/claudecode"
+	"github.com/simonbystrom/mastermind/internal/harness/opencode"
 	"github.com/simonbystrom/mastermind/internal/hook"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 )
@@ -66,8 +69,11 @@ type PruneResultMsg struct {
 }
 
 type PreviewStartedMsg struct{ AgentID string }
-type PreviewStoppedMsg  struct{ AgentID string }
-type PreviewErrorMsg    struct{ AgentID string; Error string }
+type PreviewStoppedMsg struct{ AgentID string }
+type PreviewErrorMsg struct {
+	AgentID string
+	Error   string
+}
 
 // mtimeEntry caches the result of a file read keyed by its mtime.
 type mtimeEntry struct {
@@ -76,33 +82,37 @@ type mtimeEntry struct {
 }
 
 type Orchestrator struct {
-	ctx         context.Context
-	store       *agent.Store
-	repoPath    string
-	session     string
-	worktreeDir string
-	program     *tea.Program
-	monitor     tmux.PaneStatusChecker
-	statePath   string
-	git          git.GitOps
-	tmux         tmux.TmuxOps
-	lazygitSplit int
-	agentTeams      bool
-	teammateMode    string
-	skipPermissions bool
+	ctx              context.Context
+	store            *agent.Store
+	repoPath         string
+	session          string
+	worktreeDir      string
+	program          *tea.Program
+	monitor          tmux.PaneStatusChecker
+	statePath        string
+	git              git.GitOps
+	tmux             tmux.TmuxOps
+	lazygitSplit     int
+	agentTeams       bool
+	teammateMode     string
+	skipPermissions  bool
 	promptEditor     bool
 	promptEditorSize int
 
+	// Harness support
+	harnesses      map[harness.Type]harness.Harness
+	defaultHarness harness.Type
+
 	// Performance caches (monitor loop only, no mutex needed)
-	idleHasChanges       map[string]*bool       // agentID → cached HasChanges result for idle agents
-	hookMtimeCache       map[string]mtimeEntry  // worktreePath → cached hook status
-	statuslineMtimeCache map[string]mtimeEntry  // worktreePath → cached statusline data
-	todosMtimeCache      map[string]mtimeEntry  // worktreePath → cached todos data
-	lastSaveTime         time.Time              // debounce state persistence
+	idleHasChanges       map[string]*bool      // agentID → cached HasChanges result for idle agents
+	hookMtimeCache       map[string]mtimeEntry // worktreePath → cached hook status
+	statuslineMtimeCache map[string]mtimeEntry // worktreePath → cached statusline data
+	todosMtimeCache      map[string]mtimeEntry // worktreePath → cached todos data
+	lastSaveTime         time.Time             // debounce state persistence
 
 	previewMu         sync.RWMutex
-	previewAgentID    string // ID of agent being previewed (empty = no preview)
-	previewPrevBranch string // branch the main worktree was on before preview
+	previewAgentID    string       // ID of agent being previewed (empty = no preview)
+	previewPrevBranch string       // branch the main worktree was on before preview
 	previewPrevStatus agent.Status // agent's status before preview started
 
 	previewCleanupOnce sync.Once // ensures shutdown cleanup runs exactly once
@@ -156,21 +166,31 @@ func WithPromptEditorSize(pct int) Option {
 	return func(o *Orchestrator) { o.promptEditorSize = pct }
 }
 
+// WithDefaultHarness sets the default harness type for new agents.
+func WithDefaultHarness(ht harness.Type) Option {
+	return func(o *Orchestrator) { o.defaultHarness = ht }
+}
+
 func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
-		ctx:                  ctx,
-		store:                store,
-		repoPath:             repoPath,
-		session:              session,
-		worktreeDir:          worktreeDir,
-		monitor:              tmux.NewPaneMonitor(),
-		statePath:            worktreeDir + "/mastermind-state.json",
-		git:                  git.RealGit{},
-		tmux:                 tmux.RealTmux{},
-		lazygitSplit:         80,
-		promptEditorSize:    50,
-		agentTeams:           true,
-		teammateMode:         "in-process",
+		ctx:              ctx,
+		store:            store,
+		repoPath:         repoPath,
+		session:          session,
+		worktreeDir:      worktreeDir,
+		monitor:          tmux.NewPaneMonitor(),
+		statePath:        worktreeDir + "/mastermind-state.json",
+		git:              git.RealGit{},
+		tmux:             tmux.RealTmux{},
+		lazygitSplit:     80,
+		promptEditorSize: 50,
+		agentTeams:       true,
+		teammateMode:     "in-process",
+		harnesses: map[harness.Type]harness.Harness{
+			harness.TypeClaudeCode: &claudecode.Harness{},
+			harness.TypeOpenCode:   &opencode.Harness{},
+		},
+		defaultHarness:       harness.TypeClaudeCode,
 		idleHasChanges:       make(map[string]*bool),
 		hookMtimeCache:       make(map[string]mtimeEntry),
 		statuslineMtimeCache: make(map[string]mtimeEntry),
@@ -186,7 +206,11 @@ func (o *Orchestrator) SetProgram(p *tea.Program) {
 	o.program = p
 }
 
-func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) error {
+func (o *Orchestrator) DefaultHarness() harness.Type {
+	return o.defaultHarness
+}
+
+func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool, harnessType harness.Type) error {
 	// Guard against worktree name collision
 	for _, existing := range o.store.All() {
 		if existing.Branch == branch {
@@ -212,20 +236,30 @@ func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) 
 		return fmt.Errorf("create worktree: %w", err)
 	}
 
-	// Write Claude Code project settings with statusline config
-	if err := o.writeClaudeProjectSettings(wtPath); err != nil {
-		slog.Warn("failed to write claude project settings", "error", err)
-	}
-	// Write hook files so Claude Code reports status via hooks
-	if err := hook.WriteHookFiles(wtPath); err != nil {
-		slog.Warn("failed to write hook files, falling back to tmux polling", "error", err)
+	// Get the harness implementation
+	h, ok := o.harnesses[harnessType]
+	if !ok {
+		o.git.RemoveWorktree(o.repoPath, wtPath)
+		return fmt.Errorf("unknown harness type: %s", harnessType)
 	}
 
-	claudeCmd := []string{"claude"}
-	if o.skipPermissions {
-		claudeCmd = append(claudeCmd, "--dangerously-skip-permissions")
+	// Setup harness (writes hooks/plugins/config)
+	setupOpts := harness.SetupOptions{
+		AgentTeams:   o.agentTeams,
+		TeammateMode: o.teammateMode,
 	}
-	paneID, err := o.tmux.NewWindow(o.session, branch, wtPath, claudeCmd)
+	if err := h.Setup(wtPath, setupOpts); err != nil {
+		slog.Warn("failed to setup harness", "harness", harnessType, "error", err)
+	}
+
+	// Build command
+	cmdOpts := harness.Options{
+		SkipPermissions: o.skipPermissions,
+	}
+	cmd := h.Command(cmdOpts)
+
+	// Launch in tmux
+	paneID, err := o.tmux.NewWindow(o.session, branch, wtPath, cmd)
 	if err != nil {
 		o.git.RemoveWorktree(o.repoPath, wtPath)
 		return fmt.Errorf("create tmux window: %w", err)
@@ -233,7 +267,7 @@ func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) 
 
 	windowID, _ := o.tmux.WindowIDForPane(paneID)
 
-	a := agent.NewAgent(branch, baseBranch, wtPath, windowID, paneID)
+	a := agent.NewAgent(branch, baseBranch, wtPath, windowID, paneID, harnessType)
 	o.store.Add(a)
 
 	// Open prompt editor split pane if enabled
@@ -253,7 +287,7 @@ func (o *Orchestrator) SpawnAgent(branch, baseBranch string, createBranch bool) 
 	}
 
 	// Write agent metadata so orphaned worktrees can be rediscovered
-	writeAgentMetadata(wtPath, baseBranch, "")
+	writeAgentMetadata(wtPath, baseBranch, "", harnessType)
 	if err := appendGitExclude(wtPath, agentMetadataFile, ""); err != nil {
 		slog.Warn("failed to exclude agent metadata from git", "path", wtPath, "error", err)
 	}
@@ -742,7 +776,7 @@ func (o *Orchestrator) readStatuslineCached(a *agent.Agent) {
 	a.SetStatuslineData(sd)
 	// Update agent metadata file with session ID for orphan recovery
 	if sd.SessionID != "" && sd.SessionID != prevSessionID {
-		writeAgentMetadata(a.WorktreePath, a.BaseBranch, sd.SessionID)
+		writeAgentMetadata(a.WorktreePath, a.BaseBranch, sd.SessionID, a.Harness)
 	}
 	o.store.MarkDirty()
 	o.statuslineMtimeCache[a.WorktreePath] = mtimeEntry{mtime: mtime, result: sd}
@@ -1333,14 +1367,19 @@ func (o *Orchestrator) RecoverAgents() {
 
 // agentMetadata is written to each worktree so orphaned agents can be rediscovered.
 type agentMetadata struct {
-	BaseBranch string `json:"base_branch"`
-	SessionID  string `json:"session_id,omitempty"`
+	BaseBranch  string       `json:"base_branch"`
+	SessionID   string       `json:"session_id,omitempty"`
+	HarnessType harness.Type `json:"harness,omitempty"`
 }
 
 const agentMetadataFile = ".mastermind-agent.json"
 
-func writeAgentMetadata(wtPath, baseBranch, sessionID string) {
-	data, err := json.Marshal(agentMetadata{BaseBranch: baseBranch, SessionID: sessionID})
+func writeAgentMetadata(wtPath, baseBranch, sessionID string, harnessType harness.Type) {
+	data, err := json.Marshal(agentMetadata{
+		BaseBranch:  baseBranch,
+		SessionID:   sessionID,
+		HarnessType: harnessType,
+	})
 	if err != nil {
 		slog.Warn("failed to marshal agent metadata", "error", err)
 		return
@@ -1415,6 +1454,12 @@ func (o *Orchestrator) discoverOrphanedAgents() int {
 		}
 		baseBranch := meta.BaseBranch
 
+		// Determine harness type from metadata, default to Claude Code for backwards compat
+		harnessType := meta.HarnessType
+		if harnessType == "" {
+			harnessType = harness.TypeClaudeCode
+		}
+
 		// Check if a tmux window with this branch name exists
 		winInfo, ok := windows[branch]
 		if ok {
@@ -1450,7 +1495,7 @@ func (o *Orchestrator) discoverOrphanedAgents() int {
 				}
 			}
 
-			a := agent.NewAgent(branch, baseBranch, wtPath, winInfo.ID, paneID)
+			a := agent.NewAgent(branch, baseBranch, wtPath, winInfo.ID, paneID, harnessType)
 			a.SetStatus(status)
 			if status == agent.StatusWaiting {
 				a.SetWaitingFor("permission")
@@ -1478,7 +1523,7 @@ func (o *Orchestrator) discoverOrphanedAgents() int {
 				continue
 			}
 
-			a := agent.NewAgent(branch, baseBranch, wtPath, "", "")
+			a := agent.NewAgent(branch, baseBranch, wtPath, "", "", harnessType)
 			a.SetStatus(agent.StatusOrphaned)
 			a.SetEverActive(true)
 			if meta.SessionID != "" {

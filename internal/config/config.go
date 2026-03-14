@@ -45,18 +45,24 @@ type Layout struct {
 
 // Claude holds settings for Claude Code agent behavior.
 type Claude struct {
-	AgentTeams      bool   `toml:"agent_teams"`
-	TeammateMode    string `toml:"teammate_mode"`
-	SkipPermissions bool   `toml:"skip_permissions"`
-	PromptEditor    bool   `toml:"prompt_editor"`
-	PromptEditorSize int  `toml:"prompt_editor_size"`
+	AgentTeams       bool   `toml:"agent_teams"`
+	TeammateMode     string `toml:"teammate_mode"`
+	SkipPermissions  bool   `toml:"skip_permissions"`
+	PromptEditor     bool   `toml:"prompt_editor"`
+	PromptEditorSize int    `toml:"prompt_editor_size"`
+}
+
+// Harness holds settings for the AI assistant harness selection.
+type Harness struct {
+	Default string `toml:"default"` // "claude" or "opencode"
 }
 
 // Config is the top-level configuration.
 type Config struct {
-	Colors Colors `toml:"colors"`
-	Layout Layout `toml:"layout"`
-	Claude Claude `toml:"claude"`
+	Colors  Colors  `toml:"colors"`
+	Layout  Layout  `toml:"layout"`
+	Claude  Claude  `toml:"claude"`
+	Harness Harness `toml:"harness"`
 }
 
 // Default returns a Config populated with the current hardcoded defaults.
@@ -97,6 +103,9 @@ func Default() Config {
 			AgentTeams:       true,
 			TeammateMode:     "in-process",
 			PromptEditorSize: 50,
+		},
+		Harness: Harness{
+			Default: "claude", // backwards compatible default
 		},
 	}
 }
@@ -167,6 +176,9 @@ const defaultFileContent = `# Mastermind configuration
 [layout]
 # dashboard_width = 55   # percentage of terminal width for left panel
 # lazygit_split   = 80   # percentage for lazygit pane size
+
+[harness]
+# default = "claude"  # Default harness: "claude" or "opencode"
 
 [claude]
 # agent_teams      = true   # enable Claude Code agent teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS)

@@ -20,25 +20,25 @@ type mockGit struct {
 	mu    sync.Mutex
 	calls []string
 
-	createBranchErr      error
-	createWorktreeResult string
-	createWorktreeErr    error
-	removeWorktreeErr    error
-	isBranchCheckedOut   bool
-	isBranchMergedResult bool
-	hasChangesResult     bool
-	headCommitResult     string
-	headCommitErr        error
+	createBranchErr         error
+	createWorktreeResult    string
+	createWorktreeErr       error
+	removeWorktreeErr       error
+	isBranchCheckedOut      bool
+	isBranchMergedResult    bool
+	hasChangesResult        bool
+	headCommitResult        string
+	headCommitErr           error
 	mergeInWorktreeConflict bool
-	mergeInWorktreeErr   error
-	conflictFilesResult  []string
-	worktreeForBranch    string
-	listBranchesResult   []git.Branch
-	checkoutBranchErr    error
-	currentBranchResult  string
-	currentBranchErr     error
-	branchExistsResult   bool
-	mergeAbortErr        error
+	mergeInWorktreeErr      error
+	conflictFilesResult     []string
+	worktreeForBranch       string
+	listBranchesResult      []git.Branch
+	checkoutBranchErr       error
+	currentBranchResult     string
+	currentBranchErr        error
+	branchExistsResult      bool
+	mergeAbortErr           error
 }
 
 func (m *mockGit) record(call string) {
@@ -335,7 +335,7 @@ func TestSpawnAgent_Success(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	err := o.SpawnAgent("feat/x", "main", true)
+	err := o.SpawnAgent("feat/x", "main", true, "claude")
 	if err != nil {
 		t.Fatalf("SpawnAgent: %v", err)
 	}
@@ -368,8 +368,8 @@ func TestSpawnAgent_DuplicateBranch(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("feat/x", "main", true)
-	err := o.SpawnAgent("feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true, "claude")
+	err := o.SpawnAgent("feat/x", "main", true, "claude")
 	if err == nil {
 		t.Fatal("expected error for duplicate branch")
 	}
@@ -381,7 +381,7 @@ func TestSpawnAgent_BranchCheckedOut(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	err := o.SpawnAgent("feat/x", "", false)
+	err := o.SpawnAgent("feat/x", "", false, "claude")
 	if err == nil {
 		t.Fatal("expected error for checked-out branch")
 	}
@@ -393,7 +393,7 @@ func TestSpawnAgent_TmuxFails_CleansUpWorktree(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	err := o.SpawnAgent("feat/x", "main", true)
+	err := o.SpawnAgent("feat/x", "main", true, "claude")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -422,7 +422,7 @@ func TestDismissAgent_Success(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true, "claude")
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -457,7 +457,7 @@ func TestDismissAgent_WithDeleteBranch(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true, "claude")
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -473,7 +473,7 @@ func TestMergeAgent_NoConflicts(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true, "claude")
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -500,7 +500,7 @@ func TestMergeAgent_WithConflicts(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true, "claude")
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -531,7 +531,7 @@ func TestMergeAgent_UncommittedChanges(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	o.SpawnAgent("feat/x", "main", true)
+	o.SpawnAgent("feat/x", "main", true, "claude")
 	agents := o.store.All()
 	id := agents[0].ID
 
@@ -547,7 +547,7 @@ func TestHandleAgentFinished_WithChanges(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1", "claude")
 	o.store.Add(a)
 
 	o.handleAgentFinished(a, 0)
@@ -563,7 +563,7 @@ func TestHandleAgentFinished_NoChanges(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1", "claude")
 	o.store.Add(a)
 
 	o.handleAgentFinished(a, 0)
@@ -579,7 +579,7 @@ func TestHandleLazygitClosed_NewCommits(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1", "claude")
 	a.SetPreReviewCommit("oldcommit")
 	a.SetLazygitPaneID("%2")
 	o.store.Add(a)
@@ -600,7 +600,7 @@ func TestHandleLazygitClosed_NoNewCommits(t *testing.T) {
 	mm := &mockMonitor{}
 	o := newTestOrch(t, mg, mt, mm)
 
-	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1")
+	a := agent.NewAgent("feat/x", "main", "/wt", "@1", "%1", "claude")
 	a.SetPreReviewCommit("samecommit")
 	a.SetLazygitPaneID("%2")
 	o.store.Add(a)
@@ -619,9 +619,9 @@ func TestCleanupDeadAgents(t *testing.T) {
 	o := newTestOrch(t, mg, mt, mm)
 
 	// Manually add agents (bypass SpawnAgent since we don't want real tmux)
-	a1 := agent.NewAgent("feat/a", "main", "/nonexistent", "@1", "%1")
+	a1 := agent.NewAgent("feat/a", "main", "/nonexistent", "@1", "%1", "claude")
 	a1.ID = "a1"
-	a2 := agent.NewAgent("feat/b", "main", "/nonexistent", "@2", "%2")
+	a2 := agent.NewAgent("feat/b", "main", "/nonexistent", "@2", "%2", "claude")
 	a2.ID = "a2"
 	o.store.Add(a1)
 	o.store.Add(a2)
@@ -768,7 +768,7 @@ func TestDiscoverOrphanedAgents_DeadPane(t *testing.T) {
 	if err := os.MkdirAll(wtDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeAgentMetadata(wtDir, "main", "")
+	writeAgentMetadata(wtDir, "main", "", "claude")
 
 	o.RecoverAgents()
 
@@ -806,7 +806,7 @@ func TestDiscoverOrphanedAgents_SkipsTracked(t *testing.T) {
 	)
 
 	// Add an existing agent with this branch
-	existing := agent.NewAgent("tracked-branch", "main", filepath.Join(dir, "tracked-branch"), "@7", "%12")
+	existing := agent.NewAgent("tracked-branch", "main", filepath.Join(dir, "tracked-branch"), "@7", "%12", "claude")
 	store.Add(existing)
 
 	// Create the worktree dir
@@ -822,7 +822,7 @@ func TestDiscoverOrphanedAgents_SkipsTracked(t *testing.T) {
 
 func TestWriteAndReadAgentMetadata(t *testing.T) {
 	dir := t.TempDir()
-	writeAgentMetadata(dir, "feature-branch", "test-session-123")
+	writeAgentMetadata(dir, "feature-branch", "test-session-123", "claude")
 
 	meta := readAgentMetadata(dir)
 	if meta == nil {

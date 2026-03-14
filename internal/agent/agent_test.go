@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewAgent(t *testing.T) {
-	a := NewAgent("feat/x", "main", "/tmp/wt", "@1", "%0")
+	a := NewAgent("feat/x", "main", "/tmp/wt", "@1", "%0", "claude")
 
 	if a.Branch != "feat/x" {
 		t.Errorf("Branch = %q, want %q", a.Branch, "feat/x")
@@ -38,7 +38,7 @@ func TestNewAgent(t *testing.T) {
 }
 
 func TestAgent_GetSetStatus(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	statuses := []Status{
 		StatusRunning, StatusWaiting, StatusReviewReady,
@@ -54,7 +54,7 @@ func TestAgent_GetSetStatus(t *testing.T) {
 }
 
 func TestAgent_GetSetWaitingFor(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	a.SetWaitingFor("permission")
 	if got := a.GetWaitingFor(); got != "permission" {
@@ -68,7 +68,7 @@ func TestAgent_GetSetWaitingFor(t *testing.T) {
 }
 
 func TestAgent_GetSetEverActive(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	if a.GetEverActive() {
 		t.Error("GetEverActive() should be false initially")
@@ -80,7 +80,7 @@ func TestAgent_GetSetEverActive(t *testing.T) {
 }
 
 func TestAgent_SetFinished(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	now := time.Now()
 	a.SetFinished(42, now)
@@ -94,7 +94,7 @@ func TestAgent_SetFinished(t *testing.T) {
 }
 
 func TestAgent_LazygitPaneID(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	if got := a.GetLazygitPaneID(); got != "" {
 		t.Errorf("GetLazygitPaneID() = %q, want empty", got)
@@ -106,7 +106,7 @@ func TestAgent_LazygitPaneID(t *testing.T) {
 }
 
 func TestAgent_PreReviewCommit(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	a.SetPreReviewCommit("abc123")
 	if got := a.GetPreReviewCommit(); got != "abc123" {
@@ -115,7 +115,7 @@ func TestAgent_PreReviewCommit(t *testing.T) {
 }
 
 func TestAgent_MergePreferences(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	if a.GetMergeDeleteBranch() {
 		t.Error("GetMergeDeleteBranch() should be false initially")
@@ -136,7 +136,7 @@ func TestAgent_MergePreferences(t *testing.T) {
 }
 
 func TestAgent_Duration_Running(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	// Running agent: Duration increments via wall clock
 	time.Sleep(10 * time.Millisecond)
@@ -147,7 +147,7 @@ func TestAgent_Duration_Running(t *testing.T) {
 }
 
 func TestAgent_Duration_PausesWhenNotRunning(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	// Run for a bit
 	time.Sleep(20 * time.Millisecond)
@@ -175,7 +175,7 @@ func TestAgent_Duration_PausesWhenNotRunning(t *testing.T) {
 }
 
 func TestAgent_Duration_Finished(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	// Run for a bit, then pause, then finish
 	time.Sleep(10 * time.Millisecond)
@@ -191,7 +191,7 @@ func TestAgent_Duration_Finished(t *testing.T) {
 }
 
 func TestAgent_Snapshot(t *testing.T) {
-	a := NewAgent("feat/snap", "main", "/tmp/wt", "@1", "%0")
+	a := NewAgent("feat/snap", "main", "/tmp/wt", "@1", "%0", "claude")
 	a.SetStatus(StatusWaiting)
 	a.SetWaitingFor("permission")
 	a.SetEverActive(true)
@@ -235,7 +235,7 @@ func TestAgent_Snapshot(t *testing.T) {
 }
 
 func TestAgent_SetFinished_OnlyOnce(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	first := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
 	second := time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC)
@@ -252,7 +252,7 @@ func TestAgent_SetFinished_OnlyOnce(t *testing.T) {
 }
 
 func TestAgent_ConcurrentAccess(t *testing.T) {
-	a := NewAgent("b", "main", "/wt", "@1", "%0")
+	a := NewAgent("b", "main", "/wt", "@1", "%0", "claude")
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
