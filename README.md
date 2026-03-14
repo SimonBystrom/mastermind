@@ -148,13 +148,20 @@ The config uses TOML format:
 ## Agent Lifecycle
 
 ```
-running → waiting (permission/input)
-    ↓
-review ready → reviewing (lazygit open) → reviewed (commits made)
-    ↓               ↓                          ↓
-   done        previewing                  merge → conflicts → resolve → done
-                                             ↓
-                                            done
+spawn → running ↔ waiting (permission/input)
+          │         │
+          ├─────────┴─→ review ready ↔ previewing
+          │                  │
+          │                  ├─→ reviewing (lazygit) ─→ reviewed → merge → conflicts
+          │                  │         │                    │         │         │
+          │                  │         └────────────────────┘         │         └─→ reviewing
+          │                  │                                        │               (resolve)
+          │                  └─→ done ←───────────────────────────────┴─────────────────┘
+          │
+          └─→ done → dismissed
+          
+orphaned (no tmux) → running (resume with 'r')
+                  → dismissed (cleanup)
 ```
 
 | Status | Description |
