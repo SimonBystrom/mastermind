@@ -105,8 +105,11 @@ The config uses TOML format:
 # lazygit_split   = 80   # percentage for lazygit pane size
 
 [claude]
-# agent_teams   = true           # enable Claude Code agent teams
-# teammate_mode = "in-process"   # teammate mode for agent team collaboration
+# agent_teams        = true           # enable Claude Code agent teams
+# teammate_mode      = "in-process"   # teammate mode for agent team collaboration
+# skip_permissions   = false          # pass --dangerously-skip-permissions to all spawned agents
+# prompt_editor      = false          # open nvim in a split pane for drafting prompts
+# prompt_editor_size = 50             # percentage of window height for the prompt editor pane
 ```
 
 ## Features
@@ -135,6 +138,8 @@ The config uses TOML format:
 | `m` | Merge agent branch into base branch (review-ready or reviewed, with confirmation) |
 | `d` | Dismiss finished agent (keep branch) |
 | `D` | Dismiss finished agent + delete branch (with confirmation) |
+| `r` | Resume orphaned agent |
+| `w` | Prune worktree (keep branch) |
 | `c` | Clean up dead agents |
 | `j` / `k` / `↓` / `↑` | Navigate agent list |
 | `s` | Cycle sort mode (id / status / duration) |
@@ -162,6 +167,7 @@ review ready → reviewing (lazygit open) → reviewed (commits made)
 | **previewing** | Branch diff preview is active against base branch |
 | **reviewed** | Review completed, new commits were made |
 | **conflicts** | Merge conflicts detected, needs resolution |
+| **orphaned** | Agent worktree exists but tmux window is gone (can be resumed with `r`) |
 | **dismissed** | Agent was manually dismissed |
 | **done** | Agent finished with no pending changes |
 
