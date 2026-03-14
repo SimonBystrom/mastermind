@@ -180,33 +180,92 @@ func appendGitExclude(wtPath, pattern string) error {
 	return err
 }
 
-// statusPluginScript is the embedded TypeScript plugin for OpenCode
+// statusPluginScript is the embedded TypeScript plugin for OpenCode.
+//
+// OpenCode event schemas (from the source):
+//   - session.updated:  { info: Session.Info }  (Info has id, title, summary, etc. — no cost/tokens)
+//   - session.idle:     { sessionID: string }    (deprecated, no session data)
+//   - session.status:   { sessionID, status: { type: "idle"|"busy"|"retry" } }
+//   - message.updated:  { info: Message }        (AssistantMessage has cost, tokens, modelID)
+//
+// Cost/token data lives on individual AssistantMessages, not on Session.Info.
+// We use the SDK client (from PluginInput) to fetch session messages for full metrics,
+// and accumulate cost incrementally from message.updated events.
 const statusPluginScript = `import type { Plugin } from "@opencode-ai/plugin"
 
-export const MastermindStatusPlugin: Plugin = async ({ directory }) => {
+export const MastermindStatusPlugin: Plugin = async ({ client, directory }) => {
   const statusFile = ` + "`${directory}/.mastermind-status`" + `
   const metricsFile = ` + "`${directory}/.opencode-status.json`" + `
-  
+
+  // In-memory accumulator for incremental metrics updates
+  let currentSessionID = ""
+  let totalCost = 0
+  let totalInputTokens = 0
+  let totalOutputTokens = 0
+  let lastModelID = ""
+  let linesAdded = 0
+  let linesRemoved = 0
+
   const writeStatus = async (status: string) => {
     const ts = Math.floor(Date.now() / 1000)
     const data = JSON.stringify({ status, ts })
     await Bun.write(statusFile, data + "\n")
   }
-  
-  const writeMetrics = async (session: any) => {
-    if (!session) return
-    
+
+  const writeMetricsFile = async () => {
     const metrics = {
-      model: session.model?.display_name || session.model || "",
-      cost_usd: session.cost?.total_cost_usd || 0,
-      context_pct: session.context?.used_percentage || 0,
-      lines_added: session.cost?.total_lines_added || 0,
-      lines_removed: session.cost?.total_lines_removed || 0,
-      session_id: session.id || "",
+      model: lastModelID,
+      cost_usd: totalCost,
+      context_pct: 0,
+      lines_added: linesAdded,
+      lines_removed: linesRemoved,
+      session_id: currentSessionID,
     }
     await Bun.write(metricsFile, JSON.stringify(metrics))
   }
-  
+
+  // Fetch full session metrics via SDK client and write to sidecar file
+  const fetchAndWriteMetrics = async (sessionID: string) => {
+    try {
+      const { data: messages } = await client.session.messages({ path: { id: sessionID } })
+      if (!messages) return
+
+      let cost = 0
+      let inputTokens = 0
+      let outputTokens = 0
+      let modelID = ""
+
+      for (const msg of messages) {
+        const info = msg.info as any
+        if (info?.role === "assistant") {
+          cost += info.cost || 0
+          inputTokens += info.tokens?.input || 0
+          outputTokens += info.tokens?.output || 0
+          modelID = info.modelID || modelID
+        }
+      }
+
+      // Get session info for lines added/removed from summary
+      const { data: sessionInfo } = await client.session.get({ path: { id: sessionID } })
+      const summary = (sessionInfo as any)?.summary
+
+      totalCost = cost
+      totalInputTokens = inputTokens
+      totalOutputTokens = outputTokens
+      lastModelID = modelID
+      currentSessionID = sessionID
+      if (summary) {
+        linesAdded = summary.additions || 0
+        linesRemoved = summary.deletions || 0
+      }
+
+      await writeMetricsFile()
+    } catch {
+      // SDK call failed — write whatever we have accumulated
+      await writeMetricsFile()
+    }
+  }
+
   return {
     // Tool events → running
     "tool.execute.before": async () => {
@@ -215,7 +274,7 @@ export const MastermindStatusPlugin: Plugin = async ({ directory }) => {
     "tool.execute.after": async () => {
       await writeStatus("running")
     },
-    
+
     // Permission events → waiting_permission
     "permission.asked": async () => {
       await writeStatus("waiting_permission")
@@ -223,23 +282,74 @@ export const MastermindStatusPlugin: Plugin = async ({ directory }) => {
     "permission.replied": async () => {
       await writeStatus("running")
     },
-    
+
     // Session events
-    "session.created": async () => {
+    "session.created": async ({ event }: any) => {
+      const info = event?.properties?.info
+      if (info?.id) {
+        currentSessionID = info.id
+        // Reset accumulators for new session
+        totalCost = 0
+        totalInputTokens = 0
+        totalOutputTokens = 0
+        lastModelID = ""
+        linesAdded = 0
+        linesRemoved = 0
+      }
       await writeStatus("running")
     },
-    "session.idle": async ({ event }) => {
-      await writeStatus("idle")
-      
-      // Write final metrics on idle
-      if (event.properties?.session) {
-        await writeMetrics(event.properties.session)
+
+    // session.updated carries { info: Session.Info } — use for lines added/removed
+    "session.updated": async ({ event }: any) => {
+      const info = event?.properties?.info
+      if (info) {
+        if (info.id) currentSessionID = info.id
+        if (info.summary) {
+          linesAdded = info.summary.additions || 0
+          linesRemoved = info.summary.deletions || 0
+        }
+        await writeMetricsFile()
       }
     },
-    "session.updated": async ({ event }) => {
-      // Periodically update metrics during session
-      if (event.properties?.session) {
-        await writeMetrics(event.properties.session)
+
+    // message.updated carries { info: Message } — accumulate cost/tokens from assistant messages
+    "message.updated": async ({ event }: any) => {
+      const info = event?.properties?.info
+      if (info?.role === "assistant") {
+        // Track the latest model
+        if (info.modelID) lastModelID = info.modelID
+        if (info.sessionID) currentSessionID = info.sessionID
+
+        // Accumulate cost (message.updated fires multiple times per message,
+        // so we fetch full totals periodically via fetchAndWriteMetrics on idle)
+        totalCost += info.cost || 0
+        totalInputTokens += info.tokens?.input || 0
+        totalOutputTokens += info.tokens?.output || 0
+
+        await writeMetricsFile()
+      }
+    },
+
+    // session.idle carries { sessionID } — fetch full metrics via SDK
+    "session.idle": async ({ event }: any) => {
+      await writeStatus("idle")
+      const sessionID = event?.properties?.sessionID || currentSessionID
+      if (sessionID) {
+        await fetchAndWriteMetrics(sessionID)
+      }
+    },
+
+    // session.status is the non-deprecated replacement for session.idle
+    "session.status": async ({ event }: any) => {
+      const status = event?.properties?.status
+      const sessionID = event?.properties?.sessionID || currentSessionID
+      if (status?.type === "idle") {
+        await writeStatus("idle")
+        if (sessionID) {
+          await fetchAndWriteMetrics(sessionID)
+        }
+      } else if (status?.type === "busy") {
+        await writeStatus("running")
       }
     },
   }
