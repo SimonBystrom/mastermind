@@ -156,6 +156,10 @@ func (m dashboardModel) Init() tea.Cmd {
 
 func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case orchestrator.ClearAttentionMsg:
+		// Consumed silently — the indicator was already cleared by the tea.Cmd.
+		return m, nil
+
 	case orchestrator.AgentFinishedMsg:
 		name := msg.AgentID
 		var text string
@@ -311,6 +315,9 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	case tea.KeyMsg:
 		m.err = ""
 
+		// Clear the " *" attention indicator on any keypress.
+		clearCmd := m.orch.ClearAttentionIndicator()
+
 		agents := m.sortedAgents()
 
 		switch msg.String() {
@@ -358,95 +365,97 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 				status := a.GetStatus()
 				if status == agent.StatusReviewed || status == agent.StatusReviewReady {
 					name := a.ID
-					return m, func() tea.Msg {
+					return m, tea.Batch(clearCmd, func() tea.Msg {
 						return startMergeMsg{
 							agentID:    a.ID,
 							agentName:  name,
 							branch:     a.Branch,
 							baseBranch: a.BaseBranch,
 						}
-					}
+					})
 				}
 			}
 		case "d":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
 				name := a.ID
-				return m, func() tea.Msg {
+				return m, tea.Batch(clearCmd, func() tea.Msg {
 					return startDismissMsg{
 						agentID:      a.ID,
 						agentName:    name,
 						branch:       a.Branch,
 						deleteBranch: false,
 					}
-				}
+				})
 			}
 		case "c":
-			return m, func() tea.Msg {
+			return m, tea.Batch(clearCmd, func() tea.Msg {
 				results := m.orch.CleanupDeadAgents()
 				return orchestrator.CleanupMsg{Results: results}
-			}
+			})
 		case "p":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
 				previewID := m.orch.GetPreviewAgentID()
 				if previewID != "" && previewID == a.ID {
 					// Stop preview for this agent
-					return m, func() tea.Msg {
+					return m, tea.Batch(clearCmd, func() tea.Msg {
 						if err := m.orch.StopPreview(); err != nil {
 							return orchestrator.PreviewErrorMsg{AgentID: a.ID, Error: err.Error()}
 						}
 						return nil
-					}
+					})
 				} else if previewID != "" {
 					m.err = fmt.Sprintf("preview already active for agent %s — press p on that agent to stop it first", previewID)
 				} else {
-					return m, func() tea.Msg {
+					return m, tea.Batch(clearCmd, func() tea.Msg {
 						if err := m.orch.PreviewAgent(a.ID); err != nil {
 							return orchestrator.PreviewErrorMsg{AgentID: a.ID, Error: err.Error()}
 						}
 						return nil
-					}
+					})
 				}
 			}
 		case "w":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
 				name := a.ID
-				return m, func() tea.Msg {
+				return m, tea.Batch(clearCmd, func() tea.Msg {
 					return startPruneMsg{
 						agentID:   a.ID,
 						agentName: name,
 						branch:    a.Branch,
 					}
-				}
+				})
 			}
 		case "D":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
 				name := a.ID
-				return m, func() tea.Msg {
+				return m, tea.Batch(clearCmd, func() tea.Msg {
 					return startDismissMsg{
 						agentID:      a.ID,
 						agentName:    name,
 						branch:       a.Branch,
 						deleteBranch: true,
 					}
-				}
+				})
 			}
 		case "r":
 			if len(agents) > 0 && m.cursor < len(agents) {
 				a := agents[m.cursor]
 				if a.GetStatus() == agent.StatusOrphaned {
-					return m, func() tea.Msg {
+					return m, tea.Batch(clearCmd, func() tea.Msg {
 						if err := m.orch.ResumeAgent(a.ID); err != nil {
 							return resumeErrorMsg{agentID: a.ID, err: err.Error()}
 						}
 						return resumeSuccessMsg{agentID: a.ID}
-					}
+					})
 				}
 			}
 		}
+
+		return m, clearCmd
 	}
 
 	return m, nil

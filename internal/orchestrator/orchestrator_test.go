@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/git"
+	"github.com/simonbystrom/mastermind/internal/notify"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 )
 
@@ -178,15 +180,16 @@ type mockTmux struct {
 	mu    sync.Mutex
 	calls []string
 
-	newWindowResult    string
-	newWindowErr       error
-	splitWindowResult  string
-	splitWindowErr     error
-	paneExistsResult   bool
-	windowIDForPane    string
-	listPanesResult    []string
-	listWindowsResult  map[string]tmux.WindowInfo
-	listAllPanesResult map[string]tmux.PaneInfo
+	newWindowResult         string
+	newWindowErr            error
+	splitWindowResult       string
+	splitWindowErr          error
+	paneExistsResult        bool
+	windowIDForPane         string
+	listPanesResult         []string
+	listWindowsResult       map[string]tmux.WindowInfo
+	listAllPanesResult      map[string]tmux.PaneInfo
+	currentWindowNameResult string
 }
 
 func (m *mockTmux) record(call string) {
@@ -284,6 +287,19 @@ func (m *mockTmux) ListWindows(session string) (map[string]tmux.WindowInfo, erro
 		return m.listWindowsResult, nil
 	}
 	return map[string]tmux.WindowInfo{}, nil
+}
+
+func (m *mockTmux) RenameWindow(target, name string) error {
+	m.record("RenameWindow:" + target + ":" + name)
+	return nil
+}
+
+func (m *mockTmux) CurrentWindowName(target string) (string, error) {
+	m.record("CurrentWindowName:" + target)
+	if m.currentWindowNameResult != "" {
+		return m.currentWindowNameResult, nil
+	}
+	return "mastermind", nil
 }
 
 type mockMonitor struct {
@@ -843,3 +859,419 @@ func TestReadAgentMetadata_Missing(t *testing.T) {
 		t.Errorf("expected nil for missing metadata, got %+v", meta)
 	}
 }
+
+// --- Mock notifier ---
+
+type mockNotifier struct {
+	mu    sync.Mutex
+	calls []struct {
+		title   string
+		message string
+	}
+}
+
+func (n *mockNotifier) Notify(title, message string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.calls = append(n.calls, struct {
+		title   string
+		message string
+	}{title, message})
+}
+
+func (n *mockNotifier) callCount() int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return len(n.calls)
+}
+
+func (n *mockNotifier) lastMessage() string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if len(n.calls) == 0 {
+		return ""
+	}
+	return n.calls[len(n.calls)-1].message
+}
+
+// --- Notification / attention indicator tests ---
+
+func newTestOrchWithNotifier(t *testing.T, mg *mockGit, mt *mockTmux, mm *mockMonitor, mn *mockNotifier) *Orchestrator {
+	t.Helper()
+	dir := t.TempDir()
+	store := agent.NewStore()
+	return New(
+		context.Background(),
+		store,
+		"/repo",
+		"test-session",
+		dir,
+		WithGit(mg),
+		WithTmux(mt),
+		WithMonitor(mm),
+		WithNotifier(mn),
+		WithOverviewWindow("@0", "mastermind"),
+	)
+}
+
+func TestTriggerAttention_AppendsStarToWindowName(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	// Spawn an agent
+	if err := o.SpawnAgent("feat/notif", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+
+	// Simulate agent finishing with changes
+	o.handleAgentFinished(agents[0], 0)
+
+	// Verify window was renamed with " *"
+	if !mt.hasCalled("RenameWindow:@0:mastermind *") {
+		t.Error("expected RenameWindow to append ' *' to window name")
+	}
+
+	// Verify attention flag is set
+	if !o.attentionActive {
+		t.Error("expected attentionActive to be true")
+	}
+}
+
+func TestTriggerAttention_NotifiesMacOS(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	if err := o.SpawnAgent("feat/notif2", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+
+	o.handleAgentFinished(agents[0], 0)
+
+	if mn.callCount() != 1 {
+		t.Fatalf("expected 1 notification, got %d", mn.callCount())
+	}
+	if msg := mn.lastMessage(); msg == "" {
+		t.Error("expected non-empty notification message")
+	}
+}
+
+func TestTriggerAttention_DoesNotDoubleAppendStar(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	if err := o.SpawnAgent("feat/double", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+
+	// Trigger twice
+	o.handleAgentFinished(agents[0], 0)
+	o.handleAgentFinished(agents[0], 0)
+
+	// Count RenameWindow calls — should only be 1 (not 2)
+	mt.mu.Lock()
+	renameCount := 0
+	for _, c := range mt.calls {
+		if c == "RenameWindow:@0:mastermind *" {
+			renameCount++
+		}
+	}
+	mt.mu.Unlock()
+
+	if renameCount != 1 {
+		t.Errorf("expected 1 RenameWindow call, got %d", renameCount)
+	}
+}
+
+func TestClearAttentionIndicator_RemovesStar(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	if err := o.SpawnAgent("feat/clear", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+
+	// Trigger attention
+	o.handleAgentFinished(agents[0], 0)
+	if !o.attentionActive {
+		t.Fatal("expected attentionActive to be true after trigger")
+	}
+
+	// Clear it
+	cmd := o.ClearAttentionIndicator()
+	// Execute the tea.Cmd synchronously
+	cmd()
+
+	if o.attentionActive {
+		t.Error("expected attentionActive to be false after clear")
+	}
+	if !mt.hasCalled("RenameWindow:@0:mastermind") {
+		t.Error("expected RenameWindow to restore original name")
+	}
+}
+
+func TestClearAttentionIndicator_NoOpWhenNotActive(t *testing.T) {
+	mg := &mockGit{}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	// Clear without triggering — should be a no-op
+	cmd := o.ClearAttentionIndicator()
+	cmd()
+
+	if o.attentionActive {
+		t.Error("expected attentionActive to remain false")
+	}
+
+	// No RenameWindow calls should have been made
+	mt.mu.Lock()
+	renameCount := 0
+	for _, c := range mt.calls {
+		if c == "RenameWindow:@0:mastermind" {
+			renameCount++
+		}
+	}
+	mt.mu.Unlock()
+
+	if renameCount != 0 {
+		t.Errorf("expected 0 RenameWindow calls, got %d", renameCount)
+	}
+}
+
+func TestTriggerAttention_AgentFinishedNoChanges(t *testing.T) {
+	mg := &mockGit{hasChangesResult: false}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	if err := o.SpawnAgent("feat/nochg", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+
+	o.handleAgentFinished(agents[0], 0)
+
+	// Should still trigger attention (done state)
+	if !o.attentionActive {
+		t.Error("expected attentionActive for done agent")
+	}
+	if mn.callCount() != 1 {
+		t.Errorf("expected 1 notification, got %d", mn.callCount())
+	}
+}
+
+func TestTriggerAttention_PermissionNeeded(t *testing.T) {
+	mg := &mockGit{}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	if err := o.SpawnAgent("feat/perm", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+	a := agents[0]
+
+	// Simulate permission-needed via triggerAttention directly
+	// (handleHookStatus is tested indirectly through the monitor)
+	o.triggerAttention(a.ID, "Agent feat/perm needs permission")
+
+	if !o.attentionActive {
+		t.Error("expected attentionActive for permission")
+	}
+	if mn.callCount() != 1 {
+		t.Errorf("expected 1 notification, got %d", mn.callCount())
+	}
+	if !mt.hasCalled("RenameWindow:@0:mastermind *") {
+		t.Error("expected RenameWindow to append ' *'")
+	}
+}
+
+func TestTriggerAttention_NoWindowID(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+
+	// Create orchestrator WITHOUT overview window
+	dir := t.TempDir()
+	store := agent.NewStore()
+	o := New(
+		context.Background(),
+		store,
+		"/repo",
+		"test-session",
+		dir,
+		WithGit(mg),
+		WithTmux(mt),
+		WithMonitor(mm),
+		WithNotifier(mn),
+		// No WithOverviewWindow — overviewWindowID stays ""
+	)
+
+	if err := o.SpawnAgent("feat/nowin", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+
+	o.handleAgentFinished(agents[0], 0)
+
+	// Notification should still fire
+	if mn.callCount() != 1 {
+		t.Errorf("expected 1 notification, got %d", mn.callCount())
+	}
+
+	// But no RenameWindow call (no window ID)
+	mt.mu.Lock()
+	renameCount := 0
+	for _, c := range mt.calls {
+		if len(c) >= 12 && c[:12] == "RenameWindow" {
+			renameCount++
+		}
+	}
+	mt.mu.Unlock()
+
+	if renameCount != 0 {
+		t.Errorf("expected 0 RenameWindow calls without window ID, got %d", renameCount)
+	}
+}
+
+func TestTriggerAttention_AgentIdleWithChanges(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	if err := o.SpawnAgent("feat/idle", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+	a := agents[0]
+	a.SetEverActive(true)
+
+	// Simulate agent going idle with changes
+	o.handleAgentIdle(a)
+
+	if a.GetStatus() != agent.StatusReviewReady {
+		t.Errorf("expected status review_ready, got %s", a.GetStatus())
+	}
+	if !o.attentionActive {
+		t.Error("expected attentionActive for idle agent with changes")
+	}
+	if mn.callCount() != 1 {
+		t.Errorf("expected 1 notification, got %d", mn.callCount())
+	}
+}
+
+func TestTriggerAttention_AgentIdleNoChanges(t *testing.T) {
+	mg := &mockGit{hasChangesResult: false}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	if err := o.SpawnAgent("feat/idle-nochg", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+	a := agents[0]
+	a.SetEverActive(true)
+
+	o.handleAgentIdle(a)
+
+	if a.GetStatus() != agent.StatusDone {
+		t.Errorf("expected status done, got %s", a.GetStatus())
+	}
+	if !o.attentionActive {
+		t.Error("expected attentionActive for done agent")
+	}
+	if mn.callCount() != 1 {
+		t.Errorf("expected 1 notification, got %d", mn.callCount())
+	}
+}
+
+func TestWithNotifier_NoopByDefault(t *testing.T) {
+	mg := &mockGit{}
+	mt := &mockTmux{}
+	mm := &mockMonitor{}
+	o := newTestOrch(t, mg, mt, mm)
+
+	// Default notifier should be NoopNotifier
+	if _, ok := o.notifier.(notify.NoopNotifier); !ok {
+		t.Errorf("expected default notifier to be NoopNotifier, got %T", o.notifier)
+	}
+}
+
+func TestClearAttentionIndicator_CycleAttentionOnOff(t *testing.T) {
+	mg := &mockGit{hasChangesResult: true}
+	mt := &mockTmux{windowIDForPane: "@1"}
+	mm := &mockMonitor{}
+	mn := &mockNotifier{}
+	o := newTestOrchWithNotifier(t, mg, mt, mm, mn)
+
+	if err := o.SpawnAgent("feat/cycle", "main", true, "claude"); err != nil {
+		t.Fatalf("SpawnAgent: %v", err)
+	}
+	agents := o.store.All()
+
+	// Trigger → clear → trigger again → should rename again
+	o.handleAgentFinished(agents[0], 0)
+	if !o.attentionActive {
+		t.Fatal("expected attentionActive after first trigger")
+	}
+
+	cmd := o.ClearAttentionIndicator()
+	cmd()
+	if o.attentionActive {
+		t.Fatal("expected attentionActive=false after clear")
+	}
+
+	// Trigger again — should re-append " *"
+	// Reset status so handleAgentFinished fires the status transition again
+	agents[0].SetStatus(agent.StatusRunning)
+	delete(o.idleHasChanges, agents[0].ID)
+	o.handleAgentFinished(agents[0], 0)
+	if !o.attentionActive {
+		t.Error("expected attentionActive after second trigger")
+	}
+
+	// Should have 2 RenameWindow:@0:mastermind * calls
+	mt.mu.Lock()
+	renameStarCount := 0
+	for _, c := range mt.calls {
+		if c == "RenameWindow:@0:mastermind *" {
+			renameStarCount++
+		}
+	}
+	mt.mu.Unlock()
+
+	if renameStarCount != 2 {
+		t.Errorf("expected 2 RenameWindow '*' calls, got %d", renameStarCount)
+	}
+}
+
+// Ensure the time import is used (test timestamp formatting uses time.Now)
+var _ = time.Now

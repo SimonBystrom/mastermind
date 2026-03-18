@@ -27,6 +27,8 @@ type TmuxOps interface {
 	ListAllPanes(session string) (map[string]PaneInfo, error)
 	ListPanesInWindow(windowID string) ([]string, error)
 	ListWindows(session string) (map[string]WindowInfo, error)
+	RenameWindow(target, name string) error
+	CurrentWindowName(target string) (string, error)
 }
 
 // PaneStatusChecker abstracts pane monitoring for testing.
@@ -84,4 +86,12 @@ func (RealTmux) ListPanesInWindow(windowID string) ([]string, error) {
 
 func (RealTmux) ListWindows(session string) (map[string]WindowInfo, error) {
 	return ListWindows(session)
+}
+
+func (RealTmux) RenameWindow(target, name string) error {
+	return RenameWindow(target, name)
+}
+
+func (RealTmux) CurrentWindowName(target string) (string, error) {
+	return CurrentWindowName(target)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/simonbystrom/mastermind/internal/agent"
 	"github.com/simonbystrom/mastermind/internal/config"
 	"github.com/simonbystrom/mastermind/internal/harness"
+	"github.com/simonbystrom/mastermind/internal/notify"
 	"github.com/simonbystrom/mastermind/internal/orchestrator"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 	"github.com/simonbystrom/mastermind/internal/ui"
@@ -137,6 +138,19 @@ func main() {
 		defaultHarness = harness.TypeClaudeCode
 	}
 
+	// Detect the current tmux window so we can append " *" for attention.
+	var overviewWindowID, overviewWindowName string
+	if paneID, err := getCurrentPaneID(); err == nil {
+		if wID, err := tmux.WindowIDForPane(paneID); err == nil {
+			if wName, err := tmux.CurrentWindowName(wID); err == nil {
+				overviewWindowID = wID
+				overviewWindowName = wName
+			}
+		}
+	}
+
+	notifier := notify.New(cfg.Notifications.Enabled, cfg.Notifications.Sound)
+
 	store := agent.NewStore()
 	orch := orchestrator.New(ctx, store, absRepo, *session, worktreeDir,
 		orchestrator.WithLazygitSplit(cfg.Layout.LazygitSplit),
@@ -146,6 +160,8 @@ func main() {
 		orchestrator.WithPromptEditor(cfg.Claude.PromptEditor),
 		orchestrator.WithPromptEditorSize(cfg.Claude.PromptEditorSize),
 		orchestrator.WithDefaultHarness(defaultHarness),
+		orchestrator.WithNotifier(notifier),
+		orchestrator.WithOverviewWindow(overviewWindowID, overviewWindowName),
 	)
 
 	// Recover agents from previous session

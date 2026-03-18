@@ -57,12 +57,19 @@ type Harness struct {
 	Default string `toml:"default"` // "claude" or "opencode"
 }
 
+// Notifications holds settings for OS-level notifications.
+type Notifications struct {
+	Enabled bool   `toml:"enabled"` // send macOS notifications on attention events
+	Sound   string `toml:"sound"`   // macOS system sound name (Glass, Ping, Pop, Tink, etc.)
+}
+
 // Config is the top-level configuration.
 type Config struct {
-	Colors  Colors  `toml:"colors"`
-	Layout  Layout  `toml:"layout"`
-	Claude  Claude  `toml:"claude"`
-	Harness Harness `toml:"harness"`
+	Colors        Colors        `toml:"colors"`
+	Layout        Layout        `toml:"layout"`
+	Claude        Claude        `toml:"claude"`
+	Harness       Harness       `toml:"harness"`
+	Notifications Notifications `toml:"notifications"`
 }
 
 // Default returns a Config populated with the current hardcoded defaults.
@@ -106,6 +113,10 @@ func Default() Config {
 		},
 		Harness: Harness{
 			Default: "claude", // backwards compatible default
+		},
+		Notifications: Notifications{
+			Enabled: true,
+			Sound:   "Glass",
 		},
 	}
 }
@@ -179,6 +190,10 @@ const defaultFileContent = `# Mastermind configuration
 
 [harness]
 # default = "claude"  # Default harness: "claude" or "opencode"
+
+[notifications]
+# enabled = true       # send macOS notifications when agents need attention
+# sound   = "Glass"    # macOS system sound (Glass, Ping, Pop, Tink, etc.)
 
 [claude]
 # agent_teams      = true   # enable Claude Code agent teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS)

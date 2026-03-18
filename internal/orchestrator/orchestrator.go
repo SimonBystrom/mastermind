@@ -21,6 +21,7 @@ import (
 	"github.com/simonbystrom/mastermind/internal/harness/claudecode"
 	"github.com/simonbystrom/mastermind/internal/harness/opencode"
 	"github.com/simonbystrom/mastermind/internal/hook"
+	"github.com/simonbystrom/mastermind/internal/notify"
 	"github.com/simonbystrom/mastermind/internal/tmux"
 )
 
@@ -116,6 +117,12 @@ type Orchestrator struct {
 	previewPrevStatus agent.Status // agent's status before preview started
 
 	previewCleanupOnce sync.Once // ensures shutdown cleanup runs exactly once
+
+	// Notification support
+	notifier           notify.Notifier
+	overviewWindowID   string // tmux window ID of the TUI window (e.g. "@0")
+	overviewWindowName string // original window name (without " *" suffix)
+	attentionActive    bool   // true when " *" suffix is currently appended
 }
 
 // Option configures an Orchestrator.
@@ -171,6 +178,20 @@ func WithDefaultHarness(ht harness.Type) Option {
 	return func(o *Orchestrator) { o.defaultHarness = ht }
 }
 
+// WithNotifier sets the OS notification implementation.
+func WithNotifier(n notify.Notifier) Option {
+	return func(o *Orchestrator) { o.notifier = n }
+}
+
+// WithOverviewWindow sets the tmux window ID and original name of the
+// mastermind TUI window, enabling the " *" attention indicator.
+func WithOverviewWindow(windowID, windowName string) Option {
+	return func(o *Orchestrator) {
+		o.overviewWindowID = windowID
+		o.overviewWindowName = windowName
+	}
+}
+
 func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir string, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
 		ctx:              ctx,
@@ -191,6 +212,7 @@ func New(ctx context.Context, store *agent.Store, repoPath, session, worktreeDir
 			harness.TypeOpenCode:   &opencode.Harness{},
 		},
 		defaultHarness:       harness.TypeClaudeCode,
+		notifier:             notify.NoopNotifier{},
 		idleHasChanges:       make(map[string]*bool),
 		hookMtimeCache:       make(map[string]mtimeEntry),
 		statuslineMtimeCache: make(map[string]mtimeEntry),
@@ -650,6 +672,7 @@ func (o *Orchestrator) StartMonitor() {
 					a.SetWaitingFor("permission")
 					o.store.MarkDirty()
 					slog.Debug("agent status change (tmux)", "id", a.ID, "status", "waiting", "waitingFor", "permission")
+					o.triggerAttention(a.ID, fmt.Sprintf("Agent %s needs permission", a.ID))
 					if o.program != nil {
 						o.program.Send(AgentWaitingMsg{
 							AgentID:    a.ID,
@@ -699,6 +722,7 @@ func (o *Orchestrator) handleHookStatus(a *agent.Agent, status agent.Status) boo
 			a.SetWaitingFor("permission")
 			o.store.MarkDirty()
 			slog.Debug("agent status change (hook)", "id", a.ID, "status", "waiting", "waitingFor", "permission")
+			o.triggerAttention(a.ID, fmt.Sprintf("Agent %s needs permission", a.ID))
 			if o.program != nil {
 				o.program.Send(AgentWaitingMsg{
 					AgentID:    a.ID,
@@ -848,6 +872,12 @@ func (o *Orchestrator) handleAgentFinished(a *agent.Agent, exitCode int) {
 
 	slog.Info("agent finished", "id", a.ID, "exitCode", exitCode, "hasChanges", hasChanges)
 
+	if hasChanges {
+		o.triggerAttention(a.ID, fmt.Sprintf("Agent %s finished with changes", a.ID))
+	} else {
+		o.triggerAttention(a.ID, fmt.Sprintf("Agent %s finished", a.ID))
+	}
+
 	if o.program != nil {
 		o.program.Send(AgentFinishedMsg{
 			AgentID:    a.ID,
@@ -879,6 +909,7 @@ func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 			a.SetFinished(a.GetExitCode(), time.Now())
 			o.store.MarkDirty()
 			slog.Info("agent idle with changes", "id", a.ID)
+			o.triggerAttention(a.ID, fmt.Sprintf("Agent %s ready for review", a.ID))
 			if o.program != nil {
 				o.program.Send(AgentFinishedMsg{
 					AgentID:    a.ID,
@@ -892,6 +923,7 @@ func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 			a.SetFinished(a.GetExitCode(), time.Now())
 			o.store.MarkDirty()
 			slog.Info("agent idle without changes", "id", a.ID)
+			o.triggerAttention(a.ID, fmt.Sprintf("Agent %s finished", a.ID))
 			if o.program != nil {
 				o.program.Send(AgentFinishedMsg{
 					AgentID:    a.ID,
@@ -899,6 +931,36 @@ func (o *Orchestrator) handleAgentIdle(a *agent.Agent) {
 				})
 			}
 		}
+	}
+}
+
+// ClearAttentionMsg is sent to the TUI when the " *" window indicator is cleared.
+type ClearAttentionMsg struct{}
+
+// triggerAttention fires an OS notification and appends " *" to the overview
+// window name. It is safe to call from the monitor goroutine.
+func (o *Orchestrator) triggerAttention(agentID, message string) {
+	o.notifier.Notify("Mastermind", message)
+
+	if o.overviewWindowID != "" && !o.attentionActive {
+		o.attentionActive = true
+		if err := o.tmux.RenameWindow(o.overviewWindowID, o.overviewWindowName+" *"); err != nil {
+			slog.Error("rename window failed", "error", err)
+		}
+	}
+}
+
+// ClearAttentionIndicator returns a tea.Cmd that removes the " *" suffix from
+// the overview window name. The UI should call this on any keypress.
+func (o *Orchestrator) ClearAttentionIndicator() tea.Cmd {
+	return func() tea.Msg {
+		if o.overviewWindowID != "" && o.attentionActive {
+			o.attentionActive = false
+			if err := o.tmux.RenameWindow(o.overviewWindowID, o.overviewWindowName); err != nil {
+				slog.Error("clear attention indicator failed", "error", err)
+			}
+		}
+		return ClearAttentionMsg{}
 	}
 }
 

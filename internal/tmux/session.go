@@ -49,3 +49,13 @@ func RenameWindow(target, name string) error {
 	}
 	return nil
 }
+
+// CurrentWindowName returns the name of the tmux window identified by target
+// (a window ID like @0, or a session:window specifier).
+func CurrentWindowName(target string) (string, error) {
+	out, err := exec.Command("tmux", "display-message", "-t", target, "-p", "#{window_name}").Output()
+	if err != nil {
+		return "", fmt.Errorf("get window name for %s: %w", target, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
